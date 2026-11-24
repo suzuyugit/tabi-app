@@ -1618,3 +1618,34 @@ textarea {
 .pct-inline {
   font-size: 11px;
 }
+
+/* --- ドラッグ中のゴミ箱 --- */
+.trash-zone {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  transform: translateX(-50%);
+  z-index: 55;
+  width: calc(100% - 32px);
+  max-width: 398px;
+  height: calc(var(--tabbar-h) + 40px);
+  padding-top: 10px;
+  display: flex;
+  align-items: flex-start; /* 文字は上に（重ねたカードで隠れないように） */
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed var(--danger);
+  border-radius: 16px;
+  background: var(--danger-weak);
+  color: var(--danger);
+  font-weight: 700;
+  animation: fade-in 0.15s ease-out;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.trash-zone.active {
+  background: var(--danger);
+  color: #fff;
+  border-style: solid;
+  transform: translateX(-50%) scale(1.04);
+}

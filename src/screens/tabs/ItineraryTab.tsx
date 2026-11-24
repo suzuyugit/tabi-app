@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { ItineraryItem, Trip } from '../../db/types';
@@ -55,9 +55,19 @@ export function ItineraryTab({ trip }: Props) {
     .filter((it) => (current === OUTSIDE ? !dayDates.has(it.date) : it.date === current))
     .sort((a, b) => (current === OUTSIDE ? a.date.localeCompare(b.date) || byOrder(a, b) : byOrder(a, b)));
 
-  const { bind, styleFor, draggingId } = useLongPressReorder(
+  const trashRef = useRef<HTMLDivElement>(null);
+  const { bind, styleFor, draggingId, overTrash } = useLongPressReorder(
     list.map((it) => it.id),
     (ids) => reorderItems(ids),
+    {
+      trashRef,
+      onDelete: async (id) => {
+        const it = list.find((x) => x.id === id);
+        if (!it || !confirm(`「${it.title}」を削除しますか？`)) return;
+        await deleteItem(id);
+        showToast('予定を削除しました');
+      },
+    },
   );
 
   const defaultDate = current === OUTSIDE ? (days[0]?.date ?? trip.startDate) : current;
@@ -153,7 +163,14 @@ export function ItineraryTab({ trip }: Props) {
         )}
       </ul>
 
-      {list.length > 1 && <p className="hint center">長押しで並び替えできます</p>}
+      {list.length > 0 && <p className="hint center">長押しでつかむと、並び替え・削除ができます</p>}
+
+      {/* つかんでいる間だけ出すゴミ箱 */}
+      {draggingId && (
+        <div ref={trashRef} className={`trash-zone ${overTrash ? 'active' : ''}`} aria-hidden="true">
+          🗑 {overTrash ? '離すと削除' : 'ここに持ってくると削除'}
+        </div>
+      )}
 
       <button className="btn btn-ghost btn-block" onClick={() => setEditing({})}>
         ＋予定を追加
