@@ -13,21 +13,23 @@ type Props = { trip: Trip; onClose: () => void };
 export function ShareSheet({ trip, onClose }: Props) {
   const [kind, setKind] = useState<ShareKind>('itinerary');
   const data = useLiveQuery(async () => {
-    const [items, kinds, expenses, categories, repayments] = await Promise.all([
+    const [items, kinds, expenses, categories, repayments, packing] = await Promise.all([
       db.itineraryItems.where('tripId').equals(trip.id).toArray(),
       db.itemKinds.toArray(),
       db.expenses.where('tripId').equals(trip.id).toArray(),
       db.categories.toArray(),
       db.repayments.where('tripId').equals(trip.id).toArray(),
+      db.packingItems.where('tripId').equals(trip.id).toArray(),
     ]);
-    return { items, kinds, expenses, categories, repayments };
+    return { items, kinds, expenses, categories, repayments, packing };
   }, [trip.id]);
 
   if (!data) return null;
   const payload = buildPayload(kind, trip, data);
   const url = shareUrl(payload);
   const tooLong = url.length > MAX_URL_LENGTH;
-  const title = `${trip.name}の${kind === 'itinerary' ? '旅程' : '割り勘'}`;
+  const KIND_LABEL: Record<ShareKind, string> = { itinerary: '旅程', settle: '割り勘', packing: '持ち物' };
+  const title = `${trip.name}の${KIND_LABEL[kind]}`;
   const sharedCount = data.expenses.filter((e) => !isPersonal(e)).length;
 
   const shareLink = async () => {
@@ -50,7 +52,7 @@ export function ShareSheet({ trip, onClose }: Props) {
 
   const shareFile = async () => {
     // ファイル名は英数字だけにする（日本語の名前を受け付けないブラウザがあるため）
-    const name = `tabimemo-${kind === 'itinerary' ? 'itinerary' : 'settle'}-${trip.startDate.replace(/-/g, '')}.json`;
+    const name = `tabimemo-${kind}-${trip.startDate.replace(/-/g, '')}.json`;
     const file = new File([JSON.stringify(payload)], name, { type: 'application/json' });
     if (navigator.canShare?.({ files: [file] })) {
       try {
@@ -75,9 +77,9 @@ export function ShareSheet({ trip, onClose }: Props) {
     <Sheet title="共有" onClose={onClose}>
       <div className="form">
         <div className="seg" role="radiogroup" aria-label="共有するもの">
-          {(['itinerary', 'settle'] as const).map((k) => (
+          {(['itinerary', 'settle', 'packing'] as const).map((k) => (
             <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
-              {k === 'itinerary' ? '🗓️ 旅程' : '🤝 割り勘'}
+              {{ itinerary: '🗓️ 旅程', settle: '🤝 割り勘', packing: '🎒 持ち物' }[k]}
             </button>
           ))}
         </div>
@@ -88,6 +90,8 @@ export function ShareSheet({ trip, onClose }: Props) {
             <li>旅行名・日程・メンバー（{trip.members.map((m) => m.name).join('・')}）</li>
             {kind === 'itinerary' ? (
               <li>予定 {data.items.length}件</li>
+            ) : kind === 'packing' ? (
+              <li>持ち物 {data.packing.length}個（名前だけ。チェックの状態は送りません）</li>
             ) : (
               <>
                 <li>割り勘した支出 {sharedCount}件（精算表は受け取った側で計算）</li>
@@ -96,7 +100,9 @@ export function ShareSheet({ trip, onClose }: Props) {
             )}
           </ul>
           <div className="card-label">送らないもの</div>
-          <p className="muted small">予算・手持ち現金・個人の支出・持ち物</p>
+          <p className="muted small">
+            {kind === 'packing' ? '予算・手持ち現金・予定・支出' : '予算・手持ち現金・個人の支出・持ち物'}
+          </p>
         </div>
 
         <p className="share-warning" role="note">

@@ -1,9 +1,9 @@
 // 共有リンク（SPEC「共有リンク（サーバーなし）」）
 // 共有するデータを JSON → lz-string で圧縮し、URL の # 以降に入れる（# 以降はサーバーに送られない）
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
-import type { Category, Expense, ItemKindDef, ItineraryItem, Repayment, Trip } from '../db/types';
+import type { Category, Expense, ItemKindDef, ItineraryItem, PackingItem, Repayment, Trip } from '../db/types';
 
-export type ShareKind = 'itinerary' | 'settle';
+export type ShareKind = 'itinerary' | 'settle' | 'packing';
 
 /** 共有に入れる旅行の情報（予算・手持ち現金は入れない） */
 export type SharedTrip = Pick<
@@ -21,6 +21,7 @@ export type SharePayload = {
   expenses?: Omit<Expense, 'tripId'>[];
   categories?: Category[];
   repayments?: Omit<Repayment, 'tripId'>[];
+  packing?: { name: string }[]; // 持ち物は名前だけ（チェックの状態は送らない）
 };
 
 /** URL がこれより長いときは JSON ファイルで共有する（SPEC：目安 8,000 文字） */
@@ -37,7 +38,14 @@ const strip = <T extends { tripId: string }>({ tripId: _t, ...rest }: T): Omit<T
 export function buildPayload(
   kind: ShareKind,
   trip: Trip,
-  data: { items: ItineraryItem[]; kinds: ItemKindDef[]; expenses: Expense[]; categories: Category[]; repayments: Repayment[] },
+  data: {
+    items: ItineraryItem[];
+    kinds: ItemKindDef[];
+    expenses: Expense[];
+    categories: Category[];
+    repayments: Repayment[];
+    packing?: PackingItem[];
+  },
   now = new Date().toISOString(),
 ): SharePayload {
   const t: SharedTrip = {
@@ -63,6 +71,15 @@ export function buildPayload(
       kinds: data.kinds.filter((k) => used.has(k.id)),
     };
   }
+  if (kind === 'packing') {
+    return {
+      v: 1,
+      kind,
+      sharedAt: now,
+      trip: t,
+      packing: [...(data.packing ?? [])].sort((a, b) => a.order - b.order).map((p) => ({ name: p.name })),
+    };
+  }
   // 割り勘：割り勘した支出だけ（個人の支出は入れない）
   const shared = data.expenses.filter((e) => !isPersonal(e));
   const usedCats = new Set(shared.map((e) => e.categoryId));
@@ -85,12 +102,13 @@ export function encodePayload(p: SharePayload): string {
 export function parsePayload(json: unknown): SharePayload | undefined {
   if (!json || typeof json !== 'object') return undefined;
   const p = json as SharePayload;
-  if (p.v !== 1 || (p.kind !== 'itinerary' && p.kind !== 'settle')) return undefined;
+  if (p.v !== 1 || !['itinerary', 'settle', 'packing'].includes(p.kind)) return undefined;
   const t = p.trip;
   if (!t || typeof t.id !== 'string' || typeof t.name !== 'string' || !Array.isArray(t.members)) return undefined;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(t.endDate)) return undefined;
   if (p.items && !Array.isArray(p.items)) return undefined;
   if (p.expenses && !Array.isArray(p.expenses)) return undefined;
+  if (p.packing && (!Array.isArray(p.packing) || p.packing.some((x) => typeof x?.name !== 'string'))) return undefined;
   return p;
 }
 

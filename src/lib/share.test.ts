@@ -70,4 +70,27 @@ describe('共有リンク', () => {
     await importShared(buildPayload('settle', trip, data), 'sato');
     expect(await db.expenses.count()).toBe(3);
   });
+
+  it('持ち物：名前だけ送り、取り込みではないものだけ足す（チェックは外す）', async () => {
+    const packing = [
+      { id: 'p1', tripId: 'trip-1', name: '充電器', checked: true, order: 0 },
+      { id: 'p2', tripId: 'trip-1', name: '傘', checked: false, order: 1 },
+    ];
+    const p = buildPayload('packing', trip, { ...data, packing });
+    expect(p.packing).toEqual([{ name: '充電器' }, { name: '傘' }]);
+    expect(p.items).toBeUndefined();
+    expect(decodePayload(encodePayload(p))).toEqual(p);
+
+    // 旅行がないスマホ：旅行を作って全部入る
+    await importShared(p, 'tanaka');
+    expect((await db.packingItems.toArray()).map((x) => [x.name, x.checked])).toEqual([['充電器', false], ['傘', false]]);
+    // もう持っているもの（傘）は足さない。自分で入れたもの（歯ブラシ）は残る
+    await db.packingItems.add({ id: 'mine', tripId: 'trip-1', name: '歯ブラシ', checked: true, order: 5 });
+    await db.packingItems.filter((x) => x.name === '充電器').delete();
+    await importShared(p, 'tanaka');
+    const names = (await db.packingItems.where('tripId').equals('trip-1').sortBy('order')).map((x) => x.name);
+    expect(names).toEqual(['傘', '歯ブラシ', '充電器']);
+    // 持ち物の取り込みでは、旅程や旅行の情報は変えない
+    expect((await db.trips.get('trip-1'))!.members.find((m) => m.isMe)!.id).toBe('tanaka');
+  });
 });
