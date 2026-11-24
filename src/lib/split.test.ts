@@ -89,10 +89,10 @@ describe('見積もり', () => {
     members: [{ id: 'a', name: 'A', isMe: true }, { id: 'b', name: 'B', isMe: false }],
   };
   const items = [
-    { id: 'i1', date: '2026-12-01', estimatedCost: 5000 }, // $50（ひも付いた支出あり → 実際の額を使う）
-    { id: 'i2', date: '2026-12-02', estimatedCost: 3000 }, // $30（これから）
-    { id: 'i3', date: '2026-12-02', estimatedCost: 6000, estimatedCurrency: 'JPY' }, // 6,000円（これから）
-    { id: 'i4', date: '2026-12-02' }, // 予想なし
+    { id: 'i1', date: '2026-12-01', kind: 'food' as const, estimatedCost: 5000 }, // $50（ひも付いた支出あり → 実際の額を使う）
+    { id: 'i2', date: '2026-12-02', kind: 'sightseeing' as const, estimatedCost: 3000 }, // $30（これから）
+    { id: 'i3', date: '2026-12-02', kind: 'stay' as const, estimatedCost: 6000, estimatedCurrency: 'JPY' }, // 6,000円（これから）
+    { id: 'i4', date: '2026-12-02', kind: 'other' as const }, // 予想なし
   ];
   const expenses: Expense[] = [
     { id: 'e1', tripId: 't', amount: 12000, currency: 'USD', categoryId: 'c', paymentMethod: 'card', datetime: '2026-12-01T12:00:00+09:00', itemId: 'i1', paidBy: 'a', splitAmong: ['a', 'b'], splitMode: 'equal' }, // 自分 $60
@@ -108,6 +108,10 @@ describe('見積もり', () => {
     expect(f.planned).toBe(4500 + 6000);
     expect(f.total).toBe(19500);
     expect(f.plannedByDay.get('2026-12-02')).toBe(10500);
+    // 予定の種類 → カテゴリ（観光 → 観光、宿泊 → 宿）
+    expect(f.plannedByCategory.get('cat-05-sightseeing')).toBe(4500);
+    expect(f.plannedByCategory.get('cat-02-hotel')).toBe(6000);
+    expect(f.plannedByCategory.has('cat-03-food')).toBe(false);
     expect(forecast(trip, expenses, items, 'USD').total).toBe(6000 + 3000 + 4000); // セント
   });
 });

@@ -1,4 +1,4 @@
-import type { Expense, ItineraryItem, Trip } from '../db/types';
+import type { Expense, ItemKind, ItineraryItem, Trip } from '../db/types';
 import { isoDate } from './datetime';
 import { shareOf } from './split';
 import { convert, JPY, tripCurrency } from './currency';
@@ -83,28 +83,42 @@ export function estimateIn(item: Pick<ItineraryItem, 'estimatedCost' | 'estimate
   return convert(item.estimatedCost ?? 0, item.estimatedCurrency ?? tripCurrency(trip), display, trip);
 }
 
+/** 予定の種類 → 支出のカテゴリ（見積もりをカテゴリ別に分けるため） */
+export const KIND_CATEGORY: Record<ItemKind, string> = {
+  move: 'cat-01-transport',
+  stay: 'cat-02-hotel',
+  food: 'cat-03-food',
+  sightseeing: 'cat-05-sightseeing',
+  shopping: 'cat-06-souvenir',
+  other: 'cat-07-other',
+};
+
 export type Forecast = {
   spent: number; // 使った額（自分の負担分）
   planned: number; // これからの予定の予想費用の合計
   total: number; // 見積もり = spent + planned
   plannedByDay: Map<string, number>;
+  plannedByCategory: Map<string, number>; // カテゴリ ID ごとの、これからの予定の額
 };
 
 /** 旅行でいくら使うかの見積もり（自分の分・表示通貨） */
 export function forecast(
   trip: Pick<Trip, 'members' | 'currency' | 'rate' | 'timeZone'>,
   expenses: Expense[],
-  items: Pick<ItineraryItem, 'id' | 'date' | 'estimatedCost' | 'estimatedCurrency'>[],
+  items: Pick<ItineraryItem, 'id' | 'date' | 'kind' | 'estimatedCost' | 'estimatedCurrency'>[],
   display: string,
 ): Forecast {
   const me = trip.members.find((m) => m.isMe)?.id ?? '';
   const spent = summarize(expenses, 'me', me, display, trip).total;
   const plannedByDay = new Map<string, number>();
+  const plannedByCategory = new Map<string, number>();
   let planned = 0;
   for (const it of plannedItems(items, expenses)) {
     const v = estimateIn(it, display, trip);
     planned += v;
     plannedByDay.set(it.date, (plannedByDay.get(it.date) ?? 0) + v);
+    const cat = KIND_CATEGORY[it.kind] ?? KIND_CATEGORY.other;
+    plannedByCategory.set(cat, (plannedByCategory.get(cat) ?? 0) + v);
   }
-  return { spent, planned, total: spent + planned, plannedByDay };
+  return { spent, planned, total: spent + planned, plannedByDay, plannedByCategory };
 }

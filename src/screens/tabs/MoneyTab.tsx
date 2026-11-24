@@ -75,12 +75,17 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const scale = Math.max(budget, fc.total, 1);
   const cash = cashRemaining(trip, data.expenses);
 
-  // カテゴリ別（多い順）
-  const catRows = [...summary.byCategory.entries()]
-    .filter(([, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([id, v]) => ({ cat: data.categories.get(id), id, value: v }));
-  const catMax = Math.max(1, ...catRows.map((r) => r.value));
+  // カテゴリ別：使った額＋これからの予定（予定の種類をカテゴリに当てはめる）。見積もりの多い順
+  const catIds = new Set([...summary.byCategory.keys(), ...fc.plannedByCategory.keys()]);
+  const catRows = [...catIds]
+    .map((id) => {
+      const value = summary.byCategory.get(id) ?? 0;
+      const plannedV = fc.plannedByCategory.get(id) ?? 0;
+      return { cat: data.categories.get(id), id, value, planned: plannedV, total: value + plannedV };
+    })
+    .filter((r) => r.total > 0)
+    .sort((a, b) => b.total - a.total);
+  const catMax = Math.max(1, ...catRows.map((r) => r.total));
 
   // 1日ごと（旅行の日程＋日程外で支出がある日）
   const days = tripDays(trip);
@@ -211,26 +216,46 @@ export function MoneyTab({ trip, onEdit }: Props) {
       )}
 
       <section className="card">
-        <h3 className="card-title">カテゴリ別</h3>
+        <h3 className="card-title">カテゴリ別{fc.planned > 0 ? '（見積もり）' : ''}</h3>
         {catRows.length === 0 ? (
           <p className="muted small">まだ支出がありません。右下の＋から記録できます。</p>
         ) : (
-          <ul className="hbars">
-            {catRows.map((r) => (
-              <li key={r.id} className="hbar-row" title={`${r.cat?.name ?? '?'} ${fmt(r.value)}`}>
-                <span className="hbar-label">
-                  {r.cat?.icon} {r.cat?.name ?? '(削除されたカテゴリ)'}
-                </span>
-                <span className="hbar-track">
-                  <span className="hbar-fill" style={{ width: `${(r.value / catMax) * 100}%` }} />
-                </span>
-                <span className="hbar-value">
-                  {fmt(r.value)}
-                  <span className="muted pct">{summary.total > 0 ? `${Math.round((r.value / summary.total) * 100)}%` : ''}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            {fc.planned > 0 && (
+              <ul className="legend legend-top">
+                <li>
+                  <span className="swatch" />
+                  使った額
+                </li>
+                <li>
+                  <span className="swatch planned" />
+                  これからの予定
+                </li>
+              </ul>
+            )}
+            <ul className="hbars">
+              {catRows.map((r) => (
+                <li
+                  key={r.id}
+                  className="hbar-row"
+                  title={`${r.cat?.name ?? '?'} 使った額 ${fmt(r.value)}${r.planned ? ` ＋ 予定 ${fmt(r.planned)}` : ''}`}
+                >
+                  <span className="hbar-label">
+                    {r.cat?.icon ?? '📦'} {r.cat?.name ?? 'その他'}
+                    <span className="muted pct-inline">{fc.total > 0 ? ` ${Math.round((r.total / fc.total) * 100)}%` : ''}</span>
+                  </span>
+                  <span className="hbar-track">
+                    {r.value > 0 && <span className="hbar-fill" style={{ width: `${(r.value / catMax) * 100}%` }} />}
+                    {r.planned > 0 && <span className="hbar-fill planned" style={{ width: `${(r.planned / catMax) * 100}%` }} />}
+                  </span>
+                  <span className="hbar-value">
+                    {fmt(r.total)}
+                    <PlannedNote value={r.value} planned={r.planned} fmt={fmt} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
 
@@ -247,8 +272,8 @@ export function MoneyTab({ trip, onEdit }: Props) {
                 {r.planned > 0 && <span className="hbar-fill planned" style={{ width: `${(r.planned / dayMax) * 100}%` }} />}
               </span>
               <span className="hbar-value">
-                {fmt(r.value)}
-                {r.planned > 0 && <span className="hbar-planned">＋予定 {fmt(r.planned)}</span>}
+                {fmt(r.value + r.planned)}
+                <PlannedNote value={r.value} planned={r.planned} fmt={fmt} />
               </span>
             </li>
           ))}
@@ -319,4 +344,10 @@ export function MoneyTab({ trip, onEdit }: Props) {
       </section>
     </div>
   );
+}
+
+/** 見積もりの内訳の小さな注記：「うち予定 5,000円」「すべて予定」 */
+function PlannedNote({ value, planned, fmt }: { value: number; planned: number; fmt: (n: number) => string }) {
+  if (planned <= 0) return null;
+  return <span className="hbar-planned">{value > 0 ? `うち予定 ${fmt(planned)}` : 'すべて予定'}</span>;
 }

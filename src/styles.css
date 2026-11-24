@@ -1610,3 +1610,11 @@ textarea {
 .select-all {
   margin-top: 12px;
 }
+
+.legend-top {
+  margin: -4px 0 10px;
+}
+
+.pct-inline {
+  font-size: 11px;
+}
