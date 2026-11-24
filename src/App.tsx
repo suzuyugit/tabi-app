@@ -5,6 +5,7 @@ import { TripFormScreen } from './screens/TripFormScreen';
 import { TripScreen } from './screens/TripScreen';
 import { ToastHost } from './components/Toast';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { SummaryScreen } from './screens/SummaryScreen';
 
 function renderRoute(route: Route) {
   switch (route.name) {
@@ -16,6 +17,8 @@ function renderRoute(route: Route) {
       return <TripFormScreen key="new" />;
     case 'editTrip':
       return <TripFormScreen key={route.tripId} tripId={route.tripId} />;
+    case 'summary':
+      return <SummaryScreen key={route.tripId} tripId={route.tripId} />;
     case 'trip':
       return <TripScreen key={route.tripId} tripId={route.tripId} tab={route.tab} />;
   }

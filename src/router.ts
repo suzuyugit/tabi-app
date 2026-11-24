@@ -11,6 +11,7 @@ export type Route =
   | { name: 'settings' }
   | { name: 'newTrip' }
   | { name: 'editTrip'; tripId: string }
+  | { name: 'summary'; tripId: string }
   | { name: 'trip'; tripId: string; tab: TabKey };
 
 export function parseHash(hash: string): Route {
@@ -19,6 +20,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] === 'settings') return { name: 'settings' };
   if (parts[0] === 'trip' && parts[1]) {
     if (parts[2] === 'edit') return { name: 'editTrip', tripId: parts[1] };
+    if (parts[2] === 'summary') return { name: 'summary', tripId: parts[1] };
     const tab = TAB_KEYS.includes(parts[2] as TabKey) ? (parts[2] as TabKey) : 'itinerary';
     return { name: 'trip', tripId: parts[1], tab };
   }
@@ -35,6 +37,8 @@ export function routeToHash(r: Route): string {
       return '#/new';
     case 'editTrip':
       return `#/trip/${encodeURIComponent(r.tripId)}/edit`;
+    case 'summary':
+      return `#/trip/${encodeURIComponent(r.tripId)}/summary`;
     case 'trip':
       return `#/trip/${encodeURIComponent(r.tripId)}/${r.tab}`;
   }

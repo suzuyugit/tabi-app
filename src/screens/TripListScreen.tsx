@@ -77,6 +77,15 @@ export function TripListScreen() {
                       </div>
                     )}
                   </button>
+                  {status === 'past' && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-small summary-link"
+                      onClick={() => navigate({ name: 'summary', tripId: t.id })}
+                    >
+                      📊 まとめを見る
+                    </button>
+                  )}
                 </li>
               );
             })}

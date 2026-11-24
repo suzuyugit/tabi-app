@@ -2226,3 +2226,35 @@ textarea {
   width: 80px;
   text-align: right;
 }
+
+/* --- 旅行のまとめ --- */
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+}
+
+.stat-num {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-expense {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.summary-link {
+  margin-top: 6px;
+  width: 100%;
+}
