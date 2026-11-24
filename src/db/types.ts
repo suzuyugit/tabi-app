@@ -74,4 +74,13 @@ export type PackingItem = { id: string; tripId: string; name: string; checked: b
 
 export type Category = { id: string; name: string; icon: string; usageCount: number };
 
-export type Settlement = { tripId: string; from: string; to: string; amount: number; done: boolean };
+/** 精算で実際に渡したお金の記録（一部だけ返した分も含む）。金額は円 */
+export type Repayment = {
+  id: string;
+  tripId: string;
+  from: string; // 払った（返した）人の memberId
+  to: string; // 受け取った人の memberId
+  amount: number; // 円
+  datetime: string; // ISO
+  memo?: string;
+};

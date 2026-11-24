@@ -2,8 +2,6 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
 import { addPacking, togglePacking, uncheckAll } from './packingRepo';
-import { setSettled, settledKeys } from './settlementRepo';
-import { saveExpense } from './expenseRepo';
 
 beforeEach(async () => {
   await db.delete();
@@ -26,16 +24,3 @@ describe('持ち物', () => {
   });
 });
 
-describe('精算の済みチェック', () => {
-  it('金額が変わったら済みではない。支出を変えたら消える', async () => {
-    const t = { from: 'b', to: 'a', amount: 500 };
-    await setSettled('t', t, true);
-    expect((await settledKeys('t', [t])).has('b>a')).toBe(true);
-    expect((await settledKeys('t', [{ ...t, amount: 600 }])).size).toBe(0);
-    await saveExpense('t', {
-      amount: 100, categoryId: 'cat-03-food', paymentMethod: 'cash', datetime: '2026-12-01T12:00:00+09:00',
-      paidBy: 'a', splitAmong: ['a', 'b'], splitMode: 'equal',
-    });
-    expect((await settledKeys('t', [t])).size).toBe(0);
-  });
-});

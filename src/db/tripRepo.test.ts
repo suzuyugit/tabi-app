@@ -72,13 +72,13 @@ describe('DB', () => {
     await db.packingItems.add({ id: 'p1', tripId: id, name: '傘', checked: false, order: 0 });
     await db.packingItems.add({ id: 'p2', tripId: other, name: '傘', checked: false, order: 0 });
     await db.itineraryItems.add({ id: 'i1', tripId: id, date: '2026-12-01', title: '清水寺', kind: 'sightseeing', places: [], order: 0 });
-    await db.settlements.add({ tripId: id, from: 'sato', to: 'suzuki', amount: 100, done: true });
+    await db.repayments.add({ id: 'r1', tripId: id, from: 'sato', to: 'suzuki', amount: 100, datetime: '2026-12-01T12:00:00+09:00' });
 
     await deleteTrip(id);
     expect(await db.trips.get(id)).toBeUndefined();
     expect(await db.packingItems.where('tripId').equals(id).count()).toBe(0);
     expect(await db.itineraryItems.count()).toBe(0);
-    expect(await db.settlements.count()).toBe(0);
+    expect(await db.repayments.count()).toBe(0);
     expect(await db.packingItems.where('tripId').equals(other).count()).toBe(1);
   });
 

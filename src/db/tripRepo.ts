@@ -17,6 +17,11 @@ export async function membersInUse(tripId: string): Promise<Set<string>> {
     e.splitAmong.forEach((id) => used.add(id));
     Object.entries(e.customShares ?? {}).forEach(([id, v]) => v !== 0 && used.add(id));
   }
+  // 返したお金の記録に出てくる人も消せない
+  for (const r of await db.repayments.where('tripId').equals(tripId).toArray()) {
+    used.add(r.from);
+    used.add(r.to);
+  }
   return used;
 }
 
@@ -38,7 +43,7 @@ export async function createTrip(input: TripInput, copyPackingFrom?: string): Pr
 
 export class MemberInUseError extends Error {
   constructor(public names: string[]) {
-    super(`${names.join('、')} は支出に関わっているので削除できません`);
+    super(`${names.join('、')} は支出や精算に関わっているので削除できません`);
   }
 }
 
@@ -49,7 +54,7 @@ export class CurrencyInUseError extends Error {
 }
 
 export async function updateTrip(id: string, input: TripInput): Promise<void> {
-  await db.transaction('rw', db.trips, db.expenses, async () => {
+  await db.transaction('rw', db.trips, db.expenses, db.repayments, async () => {
     const current = await db.trips.get(id);
     if (!current) throw new Error('旅行が見つかりません');
     const oldCur = current.currency ?? 'JPY';
@@ -63,7 +68,10 @@ export async function updateTrip(id: string, input: TripInput): Promise<void> {
     const removed = current.members.filter((m) => !keep.has(m.id));
     if (removed.length > 0) {
       const expenses = await db.expenses.where('tripId').equals(id).toArray();
-      const blocked = removed.filter((m) => expenses.some((e) => involves(e, m.id)));
+      const repayments = await db.repayments.where('tripId').equals(id).toArray();
+      const blocked = removed.filter(
+        (m) => expenses.some((e) => involves(e, m.id)) || repayments.some((r) => r.from === m.id || r.to === m.id),
+      );
       if (blocked.length > 0) throw new MemberInUseError(blocked.map((m) => m.name));
     }
     await db.trips.put({ ...current, ...input, cashOnHand: input.cashOnHand, currency: input.currency, rate: input.rate, timeZone: input.timeZone });
@@ -72,12 +80,12 @@ export async function updateTrip(id: string, input: TripInput): Promise<void> {
 
 /** 旅行と、それにひも付く全データを削除する */
 export async function deleteTrip(id: string): Promise<void> {
-  await db.transaction('rw', [db.trips, db.itineraryItems, db.expenses, db.packingItems, db.settlements], async () => {
+  await db.transaction('rw', [db.trips, db.itineraryItems, db.expenses, db.packingItems, db.repayments], async () => {
     await Promise.all([
       db.itineraryItems.where('tripId').equals(id).delete(),
       db.expenses.where('tripId').equals(id).delete(),
       db.packingItems.where('tripId').equals(id).delete(),
-      db.settlements.where('tripId').equals(id).delete(),
+      db.repayments.where('tripId').equals(id).delete(),
     ]);
     await db.trips.delete(id);
   });

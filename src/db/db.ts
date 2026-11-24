@@ -1,5 +1,5 @@
-import Dexie, { type EntityTable, type Table } from 'dexie';
-import type { Category, Expense, ItineraryItem, PackingItem, Settlement, Trip } from './types';
+import Dexie, { type EntityTable } from 'dexie';
+import type { Category, Expense, ItineraryItem, PackingItem, Repayment, Trip } from './types';
 
 // ID の数字は usageCount が同じときの並び順（初期値の順）
 export const DEFAULT_CATEGORIES: Omit<Category, 'usageCount'>[] = [
@@ -18,8 +18,7 @@ export class TabiDB extends Dexie {
   expenses!: EntityTable<Expense, 'id'>;
   packingItems!: EntityTable<PackingItem, 'id'>;
   categories!: EntityTable<Category, 'id'>;
-  // 主キーは [tripId+from+to] の複合キー
-  settlements!: Table<Settlement, [string, string, string]>;
+  repayments!: EntityTable<Repayment, 'id'>;
 
   constructor(name = 'tabi-app') {
     super(name);
@@ -46,6 +45,9 @@ export class TabiDB extends Dexie {
             if (!it.kind) it.kind = 'other';
           }),
       );
+
+    // v3：精算の「済み」チェック（settlements）をやめ、返したお金の記録（repayments）にした
+    this.version(3).stores({ settlements: null, repayments: 'id, tripId' });
 
     // 初回作成時だけカテゴリの初期値を入れる
     this.on('populate', (tx) => {

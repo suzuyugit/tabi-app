@@ -27,7 +27,9 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
   const [paidBy, setPaidBy] = useState(expense?.paidBy ?? me.id);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(expense?.paymentMethod ?? lastPaymentMethod());
   // 基本は割り勘しない（払った人の個人の支出）。「割り勘する」をオンにしたときだけ割る人を選ぶ
-  const isPersonal = (e: Expense) => e.splitAmong.length === 1 && e.splitAmong[0] === e.paidBy && e.splitMode === 'equal';
+  // 個人の支出 = 自分が払って自分だけの負担。前に記録した「友人の個人の支出」は割り勘オンとして開く（払った人を残すため）
+  const isPersonal = (e: Expense) =>
+    e.splitAmong.length === 1 && e.splitAmong[0] === e.paidBy && e.splitMode === 'equal' && e.paidBy === me.id;
   const [shared, setShared] = useState(expense ? !isPersonal(expense) : false);
   const [splitAmong, setSplitAmong] = useState<string[]>(
     expense && !isPersonal(expense) ? expense.splitAmong : trip.members.map((m) => m.id),
@@ -91,9 +93,9 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
       memo: memo.trim() || undefined,
       datetime: inputToIso(datetime, tz) ?? nowIso(tz),
       itemId: itemId || undefined,
-      paidBy,
-      // 割り勘しないときは「払った人だけで割る」＝個人の支出
-      splitAmong: shared ? splitAmong : [paidBy],
+      // 割り勘しないときは「自分が払って自分だけの負担」＝個人の支出
+      paidBy: shared ? paidBy : me.id,
+      splitAmong: shared ? splitAmong : [me.id],
       splitMode: shared ? splitMode : 'equal',
       customShares: shared && splitMode === 'custom' ? customShares : undefined,
     };
@@ -197,24 +199,6 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
         </div>
 
         <div className="field">
-          <span className="label">払った人</span>
-          <div className="chips" role="radiogroup">
-            {trip.members.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                role="radio"
-                aria-checked={m.id === paidBy}
-                className={`pick ${m.id === paidBy ? 'active' : ''}`}
-                onClick={() => setPaidBy(m.id)}
-              >
-                {m.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="field">
           <span className="label">支払い方法</span>
           <div className="chips" role="radiogroup">
             {PAYMENT_METHODS.map((pm) => (
@@ -260,6 +244,22 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
             </div>
             {shared ? (
               <>
+                <span className="label sub-label">払った人</span>
+                <div className="chips" role="radiogroup" aria-label="払った人">
+                  {trip.members.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={m.id === paidBy}
+                      className={`pick ${m.id === paidBy ? 'active' : ''}`}
+                      onClick={() => setPaidBy(m.id)}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+                <span className="label sub-label">割る人</span>
               <div className="chips">
                 {trip.members.map((m) => (
                   <button
@@ -302,7 +302,7 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
               )}
               </>
             ) : (
-              <span className="hint">{nameOf(paidBy)}の個人の支出として記録します</span>
+              <span className="hint">自分の個人の支出として記録します</span>
             )}
           </div>
         )}

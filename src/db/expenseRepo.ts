@@ -28,11 +28,10 @@ export type ExpenseInput = Omit<Expense, 'id' | 'tripId'>;
 /**
  * 支出を保存する（id があれば更新）。
  * - カテゴリの usageCount を +1（新規のとき、または編集でカテゴリを変えたとき）
- * - 精算表の「済み」チェックを外す（金額が変わるため）
  */
 export async function saveExpense(tripId: string, input: ExpenseInput, id?: string): Promise<string> {
   const expenseId = id ?? newId();
-  await db.transaction('rw', db.expenses, db.categories, db.settlements, async () => {
+  await db.transaction('rw', db.expenses, db.categories, async () => {
     const prev = id ? await db.expenses.get(id) : undefined;
     const e: Expense = { ...input, id: expenseId, tripId };
     if (e.splitMode !== 'custom') delete e.customShares;
@@ -47,17 +46,11 @@ export async function saveExpense(tripId: string, input: ExpenseInput, id?: stri
           c.usageCount += 1;
         });
     }
-    await db.settlements.where('tripId').equals(tripId).delete();
   });
   rememberPaymentMethod(input.paymentMethod);
   return expenseId;
 }
 
 export async function deleteExpense(id: string): Promise<void> {
-  await db.transaction('rw', db.expenses, db.settlements, async () => {
-    const e = await db.expenses.get(id);
-    if (!e) return;
-    await db.expenses.delete(id);
-    await db.settlements.where('tripId').equals(e.tripId).delete();
-  });
+  await db.expenses.delete(id);
 }

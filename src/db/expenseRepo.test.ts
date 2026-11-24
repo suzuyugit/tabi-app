@@ -14,11 +14,9 @@ beforeEach(async () => {
 });
 
 describe('expenseRepo', () => {
-  it('保存でカテゴリの usageCount が増え、精算の済みチェックが外れる', async () => {
-    await db.settlements.add({ tripId: 't', from: 'b', to: 'a', amount: 600, done: true });
+  it('保存でカテゴリの usageCount が増える', async () => {
     const id = await saveExpense('t', input);
     expect((await db.categories.get('cat-03-food'))!.usageCount).toBe(1);
-    expect(await db.settlements.count()).toBe(0);
     // 同じカテゴリのまま編集しても増えない。カテゴリを変えると変えた先が増える
     await saveExpense('t', { ...input, amount: 1300 }, id);
     expect((await db.categories.get('cat-03-food'))!.usageCount).toBe(1);
