@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
-import { addPacking, togglePacking, uncheckAll } from './packingRepo';
+import { addPacking, namesFromText, putPackingNames, savePackingList, togglePacking, tripPackingNames, uncheckAll } from './packingRepo';
+import { createTrip } from './tripRepo';
 
 beforeEach(async () => {
   await db.delete();
@@ -24,3 +25,26 @@ describe('持ち物', () => {
   });
 });
 
+
+describe('持ち物リスト', () => {
+  it('旅行に入れる：ないものだけ追加／入れ替え', async () => {
+    await addPacking('t', '傘');
+    await togglePacking((await db.packingItems.toArray())[0].id);
+    expect(await putPackingNames('t', ['充電器', '傘', ' ', '充電器'], 'merge')).toBe(1);
+    expect(await tripPackingNames('t')).toEqual(['傘', '充電器']);
+    expect((await db.packingItems.toArray()).find((p) => p.name === '傘')!.checked).toBe(true); // 今ある分はそのまま
+    await putPackingNames('t', ['パスポート'], 'replace');
+    expect(await tripPackingNames('t')).toEqual(['パスポート']);
+  });
+
+  it('名前を付けて保存し、新しい旅行にコピーできる', async () => {
+    expect(namesFromText('充電器\n\n 傘\n充電器')).toEqual(['充電器', '傘']);
+    const id = await savePackingList('国内1泊セット', ['充電器', '傘']);
+    expect((await db.packingLists.get(id))!.items).toEqual(['充電器', '傘']);
+    const trip = await createTrip(
+      { name: '大阪', startDate: '2026-12-01', endDate: '2026-12-02', budget: 0, members: [{ id: 'a', name: 'A', isMe: true }] },
+      `list:${id}`,
+    );
+    expect(await tripPackingNames(trip)).toEqual(['充電器', '傘']);
+  });
+});

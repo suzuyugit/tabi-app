@@ -89,6 +89,9 @@ export type Expense = {
 
 export type PackingItem = { id: string; tripId: string; name: string; checked: boolean; order: number };
 
+/** 名前を付けて保存した持ち物リスト（旅行とは別に持つ） */
+export type PackingList = { id: string; name: string; items: string[]; updatedAt: string };
+
 export type Category = { id: string; name: string; icon: string; usageCount: number };
 
 /** 精算で実際に渡したお金の記録（一部だけ返した分も含む） */

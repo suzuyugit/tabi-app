@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import type { Category, ItemKindDef } from '../db/types';
+import type { Category, ItemKindDef, PackingList } from '../db/types';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
+import { EditListSheet } from '../components/PackingListSheets';
 import { useCategories, useItemKinds } from '../hooks/useKinds';
 import { IconNameSheet } from '../components/IconNameSheet';
 import { LOCKED_CATEGORIES, LOCKED_KINDS } from '../lib/kinds';
@@ -13,6 +16,8 @@ export function SettingsScreen() {
   const categories = useCategories();
   const kinds = useItemKinds();
   const [editing, setEditing] = useState<Editing>(null);
+  const [editingList, setEditingList] = useState<{ list?: PackingList } | null>(null);
+  const lists = useLiveQuery(() => db.packingLists.orderBy('name').toArray());
   // カテゴリは ID 順（最初から入っている順 → 足した順）で並べる
   const cats = [...(categories ?? [])].sort((a, b) => a.id.localeCompare(b.id));
 
@@ -71,8 +76,34 @@ export function SettingsScreen() {
           </ul>
         </section>
         <section className="card">
+          <div className="settle-head">
+            <h3 className="card-title">持ち物リスト</h3>
+            <button type="button" className="btn btn-ghost btn-small" onClick={() => setEditingList({})}>
+              ＋ 作る
+            </button>
+          </div>
+          <p className="muted small">名前を付けて保存した持ち物リストです。タップで編集・共有・削除ができます。旅行の持ち物タブの「💾 リストとして保存」でも作れます。</p>
+          {lists && lists.length === 0 ? (
+            <p className="muted small">まだありません。</p>
+          ) : (
+            <ul className="setting-list">
+              {lists?.map((l) => (
+                <li key={l.id}>
+                  <button type="button" className="setting-row" onClick={() => setEditingList({ list: l })}>
+                    <span className="setting-icon">🎒</span>
+                    <span className="setting-name">{l.name}</span>
+                    <span className="muted small">{l.items.length}個</span>
+                    <span className="muted">›</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="card">
           <h3 className="card-title">共有ファイルを開く</h3>
-          <p className="muted small">リンクが長すぎて JSON ファイルで送られてきた旅程・割り勘を読み込みます。</p>
+          <p className="muted small">リンクが長すぎて JSON ファイルで送られてきた旅程・割り勘・持ち物リストを読み込みます。</p>
           <label className="btn btn-ghost btn-block file-btn">
             📄 ファイルを選ぶ
             <input
@@ -96,6 +127,7 @@ export function SettingsScreen() {
       </main>
 
       {editing?.mode === 'category' && <IconNameSheet mode="category" target={editing.target} onClose={() => setEditing(null)} />}
+      {editingList && <EditListSheet list={editingList.list} onClose={() => setEditingList(null)} />}
       {editing?.mode === 'kind' && <IconNameSheet mode="kind" target={editing.target} onClose={() => setEditing(null)} />}
     </div>
   );

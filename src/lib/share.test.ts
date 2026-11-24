@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildPayload, decodePayload, encodePayload, shareUrl } from './share';
+import { buildListPayload, buildPayload, decodePayload, encodePayload, parsePayload, shareUrl, type TripPayload } from './share';
 import { db } from '../db/db';
 import { importShared } from '../db/shareRepo';
 import { settlementForTrip } from './settlement';
@@ -46,7 +46,7 @@ describe('共有リンク', () => {
   it('割り勘：個人の支出は入れない。受け取った側でも同じ精算表になる', () => {
     const p = buildPayload('settle', trip, data);
     expect(p.expenses!.map((e) => e.id)).toEqual(['e1', 'e2']);
-    const back = decodePayload(encodePayload(p))!;
+    const back = decodePayload(encodePayload(p)) as TripPayload;
     const there = settlementForTrip(back.trip as Trip, back.expenses as Expense[], []);
     const here = settlementForTrip(trip, expenses, []);
     expect(there.transfers).toEqual(here.transfers);
@@ -71,26 +71,12 @@ describe('共有リンク', () => {
     expect(await db.expenses.count()).toBe(3);
   });
 
-  it('持ち物：名前だけ送り、取り込みではないものだけ足す（チェックは外す）', async () => {
-    const packing = [
-      { id: 'p1', tripId: 'trip-1', name: '充電器', checked: true, order: 0 },
-      { id: 'p2', tripId: 'trip-1', name: '傘', checked: false, order: 1 },
-    ];
-    const p = buildPayload('packing', trip, { ...data, packing });
-    expect(p.packing).toEqual([{ name: '充電器' }, { name: '傘' }]);
-    expect(p.items).toBeUndefined();
+  it('持ち物リストだけ：旅行の情報は入れない。前の形のリンクも読める', () => {
+    const p = buildListPayload('国内1泊セット', ['充電器', ' 傘 ', '', '充電器'], '2026-12-01T00:00:00Z');
+    expect(p).toEqual({ v: 1, kind: 'packing', sharedAt: '2026-12-01T00:00:00Z', list: { name: '国内1泊セット', items: ['充電器', '傘'] } });
+    expect(p).not.toHaveProperty('trip');
     expect(decodePayload(encodePayload(p))).toEqual(p);
-
-    // 旅行がないスマホ：旅行を作って全部入る
-    await importShared(p, 'tanaka');
-    expect((await db.packingItems.toArray()).map((x) => [x.name, x.checked])).toEqual([['充電器', false], ['傘', false]]);
-    // もう持っているもの（傘）は足さない。自分で入れたもの（歯ブラシ）は残る
-    await db.packingItems.add({ id: 'mine', tripId: 'trip-1', name: '歯ブラシ', checked: true, order: 5 });
-    await db.packingItems.filter((x) => x.name === '充電器').delete();
-    await importShared(p, 'tanaka');
-    const names = (await db.packingItems.where('tripId').equals('trip-1').sortBy('order')).map((x) => x.name);
-    expect(names).toEqual(['傘', '歯ブラシ', '充電器']);
-    // 持ち物の取り込みでは、旅程や旅行の情報は変えない
-    expect((await db.trips.get('trip-1'))!.members.find((m) => m.isMe)!.id).toBe('tanaka');
+    const old = parsePayload({ v: 1, kind: 'packing', sharedAt: 'x', trip: { name: '京都' }, packing: [{ name: '傘' }] });
+    expect(old).toEqual({ v: 1, kind: 'packing', sharedAt: 'x', list: { name: '京都の持ち物', items: ['傘'] } });
   });
 });

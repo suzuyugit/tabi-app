@@ -11,9 +11,10 @@ export type SharedTrip = Pick<
   'id' | 'name' | 'startDate' | 'endDate' | 'members' | 'currency' | 'rate' | 'timeZone' | 'settleCurrency' | 'settleRound'
 >;
 
-export type SharePayload = {
+/** 旅程・割り勘の共有（旅行ごと） */
+export type TripPayload = {
   v: 1;
-  kind: ShareKind;
+  kind: 'itinerary' | 'settle';
   sharedAt: string;
   trip: SharedTrip;
   items?: Omit<ItineraryItem, 'tripId'>[];
@@ -21,8 +22,17 @@ export type SharePayload = {
   expenses?: Omit<Expense, 'tripId'>[];
   categories?: Category[];
   repayments?: Omit<Repayment, 'tripId'>[];
-  packing?: { name: string }[]; // 持ち物は名前だけ（チェックの状態は送らない）
 };
+
+/** 持ち物リストだけの共有（旅行の情報は入れない。持ち物は名前だけで、チェックの状態は送らない） */
+export type ListPayload = {
+  v: 1;
+  kind: 'packing';
+  sharedAt: string;
+  list: { name: string; items: string[] };
+};
+
+export type SharePayload = TripPayload | ListPayload;
 
 /** URL がこれより長いときは JSON ファイルで共有する（SPEC：目安 8,000 文字） */
 export const MAX_URL_LENGTH = 8000;
@@ -36,18 +46,11 @@ export function isPersonal(e: Pick<Expense, 'paidBy' | 'splitAmong'>): boolean {
 const strip = <T extends { tripId: string }>({ tripId: _t, ...rest }: T): Omit<T, 'tripId'> => rest;
 
 export function buildPayload(
-  kind: ShareKind,
+  kind: TripPayload['kind'],
   trip: Trip,
-  data: {
-    items: ItineraryItem[];
-    kinds: ItemKindDef[];
-    expenses: Expense[];
-    categories: Category[];
-    repayments: Repayment[];
-    packing?: PackingItem[];
-  },
+  data: { items: ItineraryItem[]; kinds: ItemKindDef[]; expenses: Expense[]; categories: Category[]; repayments: Repayment[] },
   now = new Date().toISOString(),
-): SharePayload {
+): TripPayload {
   const t: SharedTrip = {
     id: trip.id,
     name: trip.name,
@@ -71,15 +74,6 @@ export function buildPayload(
       kinds: data.kinds.filter((k) => used.has(k.id)),
     };
   }
-  if (kind === 'packing') {
-    return {
-      v: 1,
-      kind,
-      sharedAt: now,
-      trip: t,
-      packing: [...(data.packing ?? [])].sort((a, b) => a.order - b.order).map((p) => ({ name: p.name })),
-    };
-  }
   // 割り勘：割り勘した支出だけ（個人の支出は入れない）
   const shared = data.expenses.filter((e) => !isPersonal(e));
   const usedCats = new Set(shared.map((e) => e.categoryId));
@@ -94,6 +88,16 @@ export function buildPayload(
   };
 }
 
+/** 持ち物リストだけの共有 */
+export function buildListPayload(name: string, items: string[], now = new Date().toISOString()): ListPayload {
+  return { v: 1, kind: 'packing', sharedAt: now, list: { name, items: [...new Set(items.map((s) => s.trim()).filter(Boolean))] } };
+}
+
+/** 旅行の持ち物（並び順）→ 名前の一覧 */
+export function packingNames(items: Pick<PackingItem, 'name' | 'order'>[]): string[] {
+  return [...items].sort((a, b) => a.order - b.order).map((p) => p.name);
+}
+
 export function encodePayload(p: SharePayload): string {
   return compressToEncodedURIComponent(JSON.stringify(p));
 }
@@ -101,14 +105,27 @@ export function encodePayload(p: SharePayload): string {
 /** 中身を確かめて取り出す。おかしければ undefined */
 export function parsePayload(json: unknown): SharePayload | undefined {
   if (!json || typeof json !== 'object') return undefined;
-  const p = json as SharePayload;
-  if (p.v !== 1 || !['itinerary', 'settle', 'packing'].includes(p.kind)) return undefined;
+  const raw = json as Record<string, unknown>;
+  if (raw.v !== 1) return undefined;
+  if (raw.kind === 'packing') {
+    const list = raw.list as ListPayload['list'] | undefined;
+    if (list && typeof list.name === 'string' && Array.isArray(list.items) && list.items.every((x) => typeof x === 'string')) {
+      return raw as unknown as ListPayload;
+    }
+    // 前の形（旅行の情報＋packing: [{ name }]）のリンクも読めるようにする
+    const old = raw as { trip?: { name?: string }; packing?: { name?: unknown }[]; sharedAt?: string };
+    if (Array.isArray(old.packing) && old.packing.every((x) => typeof x?.name === 'string')) {
+      return buildListPayload(`${old.trip?.name ?? ''}の持ち物`, old.packing.map((x) => x.name as string), old.sharedAt);
+    }
+    return undefined;
+  }
+  if (raw.kind !== 'itinerary' && raw.kind !== 'settle') return undefined;
+  const p = raw as unknown as TripPayload;
   const t = p.trip;
   if (!t || typeof t.id !== 'string' || typeof t.name !== 'string' || !Array.isArray(t.members)) return undefined;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(t.endDate)) return undefined;
   if (p.items && !Array.isArray(p.items)) return undefined;
   if (p.expenses && !Array.isArray(p.expenses)) return undefined;
-  if (p.packing && (!Array.isArray(p.packing) || p.packing.some((x) => typeof x?.name !== 'string'))) return undefined;
   return p;
 }
 

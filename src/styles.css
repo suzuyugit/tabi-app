@@ -2332,3 +2332,21 @@ textarea {
   grid-template-columns: 1fr 1fr;
   gap: 6px 12px;
 }
+
+.list-save-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.list-save-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}

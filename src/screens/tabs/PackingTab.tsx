@@ -5,11 +5,13 @@ import type { Trip } from '../../db/types';
 import { addPacking, deletePacking, reorderPacking, togglePacking, uncheckAll } from '../../db/packingRepo';
 import { useLongPressReorder } from '../../hooks/useLongPressReorder';
 import { showToast } from '../../components/Toast';
+import { AddFromListSheet, SaveListSheet } from '../../components/PackingListSheets';
 
 type Props = { trip: Trip };
 
 export function PackingTab({ trip }: Props) {
   const [name, setName] = useState('');
+  const [sheet, setSheet] = useState<'save' | 'add' | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const trashRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +69,17 @@ export function PackingTab({ trip }: Props) {
         </div>
       )}
 
+      <div className="list-actions">
+        <button type="button" className="btn btn-ghost btn-small" onClick={() => setSheet('add')}>
+          📋 保存したリストから追加
+        </button>
+        {items.length > 0 && (
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setSheet('save')}>
+            💾 リストとして保存
+          </button>
+        )}
+      </div>
+
       {items.length === 0 && <p className="empty">持ち物はまだありません。下の欄から追加できます。</p>}
 
       <ul className="packing-list">
@@ -112,6 +125,9 @@ export function PackingTab({ trip }: Props) {
           追加
         </button>
       </form>
+
+      {sheet === 'save' && <SaveListSheet tripId={trip.id} defaultName={`${trip.name}の持ち物`} onClose={() => setSheet(null)} />}
+      {sheet === 'add' && <AddFromListSheet tripId={trip.id} onClose={() => setSheet(null)} />}
 
       {draggingId && (
         <div ref={trashRef} className={`trash-zone ${overTrash ? 'active' : ''}`} aria-hidden="true">

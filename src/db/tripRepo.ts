@@ -28,9 +28,15 @@ export async function membersInUse(tripId: string): Promise<Set<string>> {
 export async function createTrip(input: TripInput, copyPackingFrom?: string): Promise<string> {
   const id = newId();
   const trip: Trip = { ...input, id, createdAt: new Date().toISOString() };
-  await db.transaction('rw', db.trips, db.packingItems, async () => {
+  await db.transaction('rw', db.trips, db.packingItems, db.packingLists, async () => {
     await db.trips.add(trip);
-    if (copyPackingFrom) {
+    if (copyPackingFrom?.startsWith('list:')) {
+      // 名前を付けて保存した持ち物リストから
+      const list = await db.packingLists.get(copyPackingFrom.slice('list:'.length));
+      await db.packingItems.bulkAdd(
+        (list?.items ?? []).map((name, i) => ({ id: newId(), tripId: id, name, checked: false, order: i })),
+      );
+    } else if (copyPackingFrom) {
       const src = await db.packingItems.where('tripId').equals(copyPackingFrom).sortBy('order');
       // チェックは全部外した状態でコピーする
       await db.packingItems.bulkAdd(

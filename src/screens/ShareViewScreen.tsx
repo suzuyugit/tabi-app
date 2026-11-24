@@ -2,15 +2,17 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { Expense, ItineraryItem, Trip } from '../db/types';
-import { decodePayload } from '../lib/share';
-import { countNewPacking, importShared } from '../db/shareRepo';
+import { decodePayload, type ListPayload, type TripPayload } from '../lib/share';
+import { importShared } from '../db/shareRepo';
 import { lastMyName } from '../db/tripRepo';
+import { countMissingPacking, putPackingNames, savePackingList } from '../db/packingRepo';
 import { formatMd, formatRange } from '../lib/date';
 import { byOrder, itemIcon, nightsOf, tripDays } from '../lib/itinerary';
 import { settleCurrencyOf, settlementForTrip } from '../lib/settlement';
 import { formatMoney } from '../lib/currency';
 import { expenseCurrency } from '../lib/money';
 import { isoDate } from '../lib/datetime';
+import { sortTrips } from '../lib/trips';
 import { navigate } from '../router';
 import { showToast } from '../components/Toast';
 
@@ -19,17 +21,6 @@ type Props = { data: string };
 /** 共有リンクを開いたときの、読むだけの画面と「自分のスマホに取り込む」 */
 export function ShareViewScreen({ data }: Props) {
   const payload = useMemo(() => decodePayload(data), [data]);
-  const existing = useLiveQuery(async () => (payload ? ((await db.trips.get(payload.trip.id)) ?? null) : null), [payload]);
-  const myName = useLiveQuery(() => lastMyName());
-  const [meId, setMeId] = useState<string>('');
-  const [busy, setBusy] = useState(false);
-  const isPacking = payload?.kind === 'packing';
-  // 持ち物は「ないものだけ足す」ので、いくつ足されるかを出す
-  const newCount = useLiveQuery(
-    async () => (payload?.kind === 'packing' ? countNewPacking(payload.trip.id, payload.packing ?? []) : 0),
-    [payload],
-  );
-
   if (!payload) {
     return (
       <div className="screen">
@@ -43,6 +34,115 @@ export function ShareViewScreen({ data }: Props) {
       </div>
     );
   }
+  return payload.kind === 'packing' ? <PackingShareView payload={payload} /> : <TripShareView payload={payload} />;
+}
+
+/** 持ち物リストだけの共有：旅行の持ち物に入れるか、名前を付けて保存する */
+function PackingShareView({ payload }: { payload: ListPayload }) {
+  const { list } = payload;
+  const trips = useLiveQuery(async () => sortTrips(await db.trips.toArray()));
+  const [tripId, setTripId] = useState('');
+  const [mode, setMode] = useState<'merge' | 'replace'>('merge');
+  const [listName, setListName] = useState(list.name);
+  const target = tripId || trips?.[0]?.id || '';
+  const missing = useLiveQuery(async () => (target ? countMissingPacking(target, list.items) : 0), [target, list.items]);
+  const targetName = trips?.find((t) => t.id === target)?.name ?? '';
+
+  const toTrip = async () => {
+    if (!target) return;
+    if (mode === 'replace' && !confirm(`「${targetName}」の持ち物を、このリスト（${list.items.length}個）に入れ替えますか？\n今ある持ち物とチェックは消えます。`)) return;
+    const n = await putPackingNames(target, list.items, mode);
+    showToast(mode === 'replace' ? `持ち物を入れ替えました（${list.items.length}個）` : `持ち物を${n}個追加しました`);
+    navigate({ name: 'trip', tripId: target, tab: 'packing' }, { replace: true });
+  };
+
+  const saveList = async () => {
+    if (!listName.trim()) return showToast('リストの名前を入れてください');
+    await savePackingList(listName, list.items);
+    showToast(`「${listName.trim()}」を保存しました`);
+    navigate({ name: 'settings' }, { replace: true });
+  };
+
+  return (
+    <div className="screen">
+      <header className="app-header">
+        <button className="icon-btn" onClick={() => navigate({ name: 'list' })} aria-label="旅行一覧へ">‹</button>
+        <div className="header-title">
+          <h1>{list.name}</h1>
+          <div className="sub">共有された持ち物リスト（読むだけ）・{formatMd(isoDate(payload.sharedAt))}時点</div>
+        </div>
+      </header>
+      <main className="content money">
+        <section className="card">
+          <h3 className="card-title">持ち物（{list.items.length}個）</h3>
+          <ul className="shared-packing">
+            {list.items.map((x, i) => (
+              <li key={i}>☐ {x}</li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="card import-card">
+          <h3 className="card-title">旅行の持ち物に入れる</h3>
+          {trips && trips.length === 0 ? (
+            <p className="muted small">このスマホにはまだ旅行がありません。下の「持ち物リストとして保存」をしておくと、旅行を作るときにコピーできます。</p>
+          ) : (
+            <>
+              <label className="field">
+                <span className="label">入れる旅行</span>
+                <select value={target} onChange={(e) => setTripId(e.target.value)} aria-label="入れる旅行">
+                  {trips?.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}（{formatRange(t.startDate, t.endDate)}）
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="seg" role="radiogroup" aria-label="入れ方">
+                <button type="button" role="radio" aria-checked={mode === 'merge'} className={mode === 'merge' ? 'active' : ''} onClick={() => setMode('merge')}>
+                  ないものだけ追加
+                </button>
+                <button type="button" role="radio" aria-checked={mode === 'replace'} className={mode === 'replace' ? 'active' : ''} onClick={() => setMode('replace')}>
+                  入れ替える
+                </button>
+              </div>
+              <p className="muted small">
+                {mode === 'merge'
+                  ? `「${targetName}」にないもの ${missing ?? 0}個を追加します。今ある持ち物とチェックはそのままです。`
+                  : `「${targetName}」の持ち物を全部消して、このリストの ${list.items.length}個にします。`}
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary btn-block"
+                onClick={toTrip}
+                disabled={!target || (mode === 'merge' && missing === 0)}
+              >
+                {mode === 'merge' ? (missing === 0 ? '追加するものはありません' : '持ち物に追加する') : '入れ替える'}
+              </button>
+            </>
+          )}
+        </section>
+
+        <section className="card">
+          <h3 className="card-title">持ち物リストとして保存</h3>
+          <p className="muted small">名前を付けて保存しておくと、旅行を作るときや持ち物タブから何度でも使えます。</p>
+          <div className="list-save-row">
+            <input value={listName} onChange={(e) => setListName(e.target.value)} aria-label="リストの名前" />
+            <button type="button" className="btn btn-ghost" onClick={saveList}>
+              💾 保存
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function TripShareView({ payload }: { payload: TripPayload }) {
+  const existing = useLiveQuery(async () => (await db.trips.get(payload.trip.id)) ?? null, [payload]);
+  const myName = useLiveQuery(() => lastMyName());
+  const [meId, setMeId] = useState<string>('');
+  const [busy, setBusy] = useState(false);
 
   const trip = { ...payload.trip, budget: 0, createdAt: '' } as Trip;
   // 「あなたは誰？」の初期値：このスマホで前に使った自分の名前と同じ人、または前に取り込んだときの自分
@@ -55,12 +155,11 @@ export function ShareViewScreen({ data }: Props) {
 
   const doImport = async () => {
     if (!me) return showToast('「あなたは誰？」を選んでください');
-    if (existing && !isPacking && !confirm(`このスマホには「${existing.name}」がもうあります。共有された内容で上書きしますか？\n（予算・手持ち現金・自分の個人の支出・持ち物はそのまま残ります）`)) return;
+    if (existing && !confirm(`このスマホには「${existing.name}」がもうあります。共有された内容で上書きしますか？\n（予算・手持ち現金・自分の個人の支出・持ち物はそのまま残ります）`)) return;
     setBusy(true);
     const id = await importShared(payload, me);
-    showToast(isPacking ? `持ち物を${newCount ?? 0}個追加しました` : '取り込みました');
-    const tab = payload.kind === 'itinerary' ? 'itinerary' : payload.kind === 'settle' ? 'settle' : 'packing';
-    navigate({ name: 'trip', tripId: id, tab }, { replace: true });
+    showToast('取り込みました');
+    navigate({ name: 'trip', tripId: id, tab: payload.kind === 'itinerary' ? 'itinerary' : 'settle' }, { replace: true });
   };
 
   return (
@@ -70,7 +169,7 @@ export function ShareViewScreen({ data }: Props) {
         <div className="header-title">
           <h1>{trip.name}</h1>
           <div className="sub">
-            共有された{{ itinerary: '旅程', settle: '割り勘', packing: '持ち物' }[payload.kind]}（読むだけ）・{formatMd(isoDate(payload.sharedAt))}時点
+            共有された{payload.kind === 'itinerary' ? '旅程' : '割り勘'}（読むだけ）・{formatMd(isoDate(payload.sharedAt))}時点
           </div>
         </div>
       </header>
@@ -83,15 +182,6 @@ export function ShareViewScreen({ data }: Props) {
 
         {payload.kind === 'itinerary' ? (
           <SharedItinerary trip={trip} items={(payload.items ?? []) as ItineraryItem[]} kinds={payload.kinds} />
-        ) : payload.kind === 'packing' ? (
-          <section className="card">
-            <h3 className="card-title">持ち物（{payload.packing?.length ?? 0}個）</h3>
-            <ul className="shared-packing">
-              {(payload.packing ?? []).map((x, i) => (
-                <li key={i}>☐ {x.name}</li>
-              ))}
-            </ul>
-          </section>
         ) : (
           <SharedSettle trip={trip} expenses={(payload.expenses ?? []) as Expense[]} payload={payload} nameOf={nameOf} />
         )}
@@ -109,21 +199,12 @@ export function ShareViewScreen({ data }: Props) {
             </div>
           </div>
           <p className="muted small">
-            {isPacking
-              ? existing
-                ? `「${existing.name}」の持ち物に、このスマホにないもの ${newCount ?? 0}個を追加します（今ある持ち物はそのまま）。`
-                : '新しい旅行として保存し、持ち物を入れます。'
-              : existing
-                ? `このスマホにある「${existing.name}」を上書きします（予算・手持ち現金・自分の個人の支出・持ち物は残ります）。`
-                : '新しい旅行として保存します。'}
+            {existing
+              ? `このスマホにある「${existing.name}」を上書きします（予算・手持ち現金・自分の個人の支出・持ち物は残ります）。`
+              : '新しい旅行として保存します。'}
           </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-block"
-            onClick={doImport}
-            disabled={busy || !me || (isPacking && !!existing && newCount === 0)}
-          >
-            {isPacking ? (existing ? (newCount === 0 ? '追加するものはありません' : '持ち物に追加する') : '取り込む') : existing ? '上書きして取り込む' : '取り込む'}
+          <button type="button" className="btn btn-primary btn-block" onClick={doImport} disabled={busy || !me}>
+            {existing ? '上書きして取り込む' : '取り込む'}
           </button>
         </section>
       </main>
@@ -182,7 +263,7 @@ function SharedSettle({
 }: {
   trip: Trip;
   expenses: Expense[];
-  payload: NonNullable<ReturnType<typeof decodePayload>>;
+  payload: TripPayload;
   nameOf: (id: string) => string;
 }) {
   const target = settleCurrencyOf(trip);

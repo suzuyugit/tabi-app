@@ -69,10 +69,18 @@ export function TripFormScreen({ tripId }: Props) {
   // 持ち物コピー元の候補（持ち物が1つ以上ある旅行）
   const copySources = useLiveQuery(async () => {
     if (isEdit) return [];
-    const [trips, items] = await Promise.all([db.trips.orderBy('startDate').reverse().toArray(), db.packingItems.toArray()]);
+    const [trips, items, lists] = await Promise.all([
+      db.trips.orderBy('startDate').reverse().toArray(),
+      db.packingItems.toArray(),
+      db.packingLists.orderBy('name').toArray(),
+    ]);
     const counts = new Map<string, number>();
     for (const p of items) counts.set(p.tripId, (counts.get(p.tripId) ?? 0) + 1);
-    return trips.filter((t) => counts.has(t.id)).map((t) => ({ trip: t, count: counts.get(t.id)! }));
+    return [
+      // 名前を付けて保存したリスト（値は list:ID）
+      ...lists.map((l) => ({ value: `list:${l.id}`, label: `${l.name}（${l.items.length}個）`, group: 'list' as const })),
+      ...trips.filter((t) => counts.has(t.id)).map((t) => ({ value: t.id, label: `${t.name}（${counts.get(t.id)}個）`, group: 'trip' as const })),
+    ];
   }, [isEdit]);
 
   useEffect(() => {
@@ -314,11 +322,20 @@ export function TripFormScreen({ tripId }: Props) {
             <span className="label">持ち物リストをコピー</span>
             <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
               <option value="">コピーしない</option>
-              {copySources.map(({ trip, count }) => (
-                <option key={trip.id} value={trip.id}>
-                  {trip.name}（{count}個）
-                </option>
-              ))}
+              {(['list', 'trip'] as const).map((g) => {
+                const opts = copySources.filter((o) => o.group === g);
+                return (
+                  opts.length > 0 && (
+                    <optgroup key={g} label={g === 'list' ? '保存した持ち物リスト' : '前の旅行の持ち物'}>
+                      {opts.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )
+                );
+              })}
             </select>
             <span className="hint">チェックは全部外した状態でコピーします</span>
           </label>

@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Category, Expense, ItemKindDef, ItineraryItem, PackingItem, Repayment, Trip } from './types';
+import type { Category, Expense, ItemKindDef, ItineraryItem, PackingItem, PackingList, Repayment, Trip } from './types';
 import { DEFAULT_ITEM_KINDS } from '../lib/kinds';
 
 // ID の数字は usageCount が同じときの並び順（初期値の順）
@@ -21,6 +21,7 @@ export class TabiDB extends Dexie {
   categories!: EntityTable<Category, 'id'>;
   repayments!: EntityTable<Repayment, 'id'>;
   itemKinds!: EntityTable<ItemKindDef, 'id'>;
+  packingLists!: EntityTable<PackingList, 'id'>;
 
   constructor(name = 'tabi-app') {
     super(name);
@@ -55,6 +56,9 @@ export class TabiDB extends Dexie {
     this.version(4)
       .stores({ itemKinds: 'id, order' })
       .upgrade((tx) => tx.table('itemKinds').bulkPut(DEFAULT_ITEM_KINDS));
+
+    // v5：持ち物リストに名前を付けて保存できるようにした
+    this.version(5).stores({ packingLists: 'id, name' });
 
     // 初回作成時だけカテゴリの初期値を入れる
     this.on('populate', (tx) => {

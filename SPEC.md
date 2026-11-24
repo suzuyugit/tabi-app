@@ -28,7 +28,7 @@ React + TypeScript + Vite で作り、IndexedDB に保存して、GitHub Pages �
 
 ## データ設計
 
-テーブルは7つ（Trip・ItineraryItem・Expense・PackingItem・Category・ItemKind・Repayment）。金額はすべてその通貨の最小単位の整数（円なら円、ドルならセント）、日時は ISO 文字列で持つ。
+テーブルは8つ（Trip・ItineraryItem・Expense・PackingItem・PackingList・Category・ItemKind・Repayment）。金額はすべてその通貨の最小単位の整数（円なら円、ドルならセント）、日時は ISO 文字列で持つ。
 
 ```ts
 type Member = { id: string; name: string; isMe: boolean };
@@ -101,6 +101,9 @@ type Expense = {
 };
 
 type PackingItem = { id: string; tripId: string; name: string; checked: boolean; order: number };
+
+// 名前を付けて保存した持ち物リスト（旅行とは別）
+type PackingList = { id: string; name: string; items: string[]; updatedAt: string };
 
 type Category = { id: string; name: string; icon: string; usageCount: number };
 
@@ -180,6 +183,8 @@ type Repayment = { id: string; tripId: string; from: string; to: string; amount:
 ### 持ち物タブ
 
 - チェックリスト。チェックしたものは下へ移動する
+- 「💾 リストとして保存」で、今の持ち物に名前を付けて保存できる（`PackingList`）。「📋 保存したリストから追加」で、ないものだけ追加／入れ替えができる
+- 保存したリストは、設定画面で編集（1行に1つ）・共有・削除でき、旅行を作るときのコピー元にも選べる
 - いちばん下の入力欄で、Enterを押すたびに続けて追加できる
 - 「全部の選択を外す」ボタン（帰りの荷造り用）
 - 長押しでつかんで並び替え。画面下のゴミ箱に離すと削除
@@ -233,7 +238,7 @@ type Repayment = { id: string; tripId: string; from: string; to: string; amount:
 - 送り方：Web Share API（`navigator.share`）でスマホの共有メニューを開く。使えない環境では URL をコピーする
 - 旅程の共有：旅行名・日程・メンバー・予定（使っている予定の種類も）を含める。変更したら送り直す
 - 割り勘の共有：割り勘した支出と渡したお金の記録を含める（精算表は受け取った側で同じ計算をして出す）
-- 持ち物の共有：持ち物の名前だけを含める（チェックの状態は送らない）。取り込むときは上書きせず、このスマホにない名前のものだけ足す（チェックは外した状態）
+- 持ち物の共有：旅行の情報は入れず、リストの名前と持ち物の名前だけを送る（チェックの状態は送らない）。受け取った側は「どの旅行の持ち物に入れるか」と「ないものだけ追加／入れ替える」を選ぶか、持ち物リストとして名前を付けて保存する
 - 予算・手持ち現金と、ほかの共有の種類のデータは含めない（旅程・割り勘の共有に個人の支出や持ち物は入れない）
 - 開いた側：読むだけの表示で中身を見せる。「あなたは誰？」でメンバーを選び、「自分のスマホに取り込む」を押すと、新しい旅行として保存する（同じ ID の旅行があれば、上書きするか確認する。上書きしても予算・手持ち現金・自分の個人の支出・持ち物は残す）
 - 制限：リンクを知っていれば誰でも見られる。共有する前にその旨を表示する。URL が長すぎるとき（目安 8,000文字超）は、JSON ファイルでの共有に切り替える（受け取った側は設定の「共有ファイルを開く」から読み込む）
