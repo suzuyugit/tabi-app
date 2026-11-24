@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
-import { createItem, deleteItem, duplicateItem, reorderItems, updateItem } from './itineraryRepo';
+import { createItem, deleteItem, duplicateItem, pinContinuations, reorderItems, updateItem } from './itineraryRepo';
 
 const T = 'trip1';
 const titles = async (date: string) =>
@@ -82,5 +82,16 @@ describe('itineraryRepo', () => {
     await duplicateItem(id, ['2026-12-10']);
     const copy = (await db.itineraryItems.where('[tripId+date]').equals([T, '2026-12-10']).toArray())[0];
     expect(copy.checkOutDate).toBe('2026-12-12');
+  });
+
+  it('続きのカードの位置を覚え、チェックアウトの時刻を変えたら忘れる', async () => {
+    const input = { kind: 'stay' as const, places: [], date: '2026-12-01', time: '15:00', title: 'ホテル', checkOutDate: '2026-12-03', checkOutTime: '11:00' };
+    const id = await createItem(T, input);
+    await pinContinuations('2026-12-03', { [id]: 2 });
+    expect((await db.itineraryItems.get(id))!.pinnedPos).toEqual({ '2026-12-03': 2 });
+    await updateItem(id, { ...input, memo: 'メモだけ' });
+    expect((await db.itineraryItems.get(id))!.pinnedPos).toEqual({ '2026-12-03': 2 });
+    await updateItem(id, { ...input, checkOutTime: '10:00' });
+    expect((await db.itineraryItems.get(id))!.pinnedPos).toBeUndefined();
   });
 });

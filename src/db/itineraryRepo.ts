@@ -28,7 +28,10 @@ export async function updateItem(id: string, input: ItemInput): Promise<void> {
   await db.transaction('rw', db.itineraryItems, db.trips, async () => {
     const cur = await db.itineraryItems.get(id);
     if (!cur) throw new Error('予定が見つかりません');
-    const next: ItineraryItem = { ...input, id, tripId: cur.tripId, order: cur.order };
+    const next: ItineraryItem = { ...input, id, tripId: cur.tripId, order: cur.order, pinnedPos: cur.pinnedPos };
+    // 続きのカードの位置に関わる項目を変えたら、手で動かした位置は忘れて自動の位置に戻す
+    const keys = ['date', 'arrivalDate', 'arrivalTime', 'arrivalIn', 'checkOutDate', 'checkOutTime', 'kind'] as const;
+    if (keys.some((k) => cur[k] !== next[k])) delete next.pinnedPos;
     if (cur.date === next.date && cur.time === next.time && cur.timeIn === next.timeIn) {
       // 日付も時刻も同じなら、長押しで並べた位置を保つ
       await db.itineraryItems.put(next);
@@ -64,6 +67,19 @@ export async function reorderItems(ids: string[]): Promise<void> {
   });
 }
 
+/**
+ * 続きのカード（日をまたぐ移動・連泊）を動かした結果を保存する。
+ * positions は「元の予定の ID → その日の並びでの位置」
+ */
+export async function pinContinuations(day: string, positions: Record<string, number>): Promise<void> {
+  await db.transaction('rw', db.itineraryItems, async () => {
+    for (const [id, pos] of Object.entries(positions)) {
+      const it = await db.itineraryItems.get(id);
+      if (it) await db.itineraryItems.put({ ...it, pinnedPos: { ...it.pinnedPos, [day]: pos } });
+    }
+  });
+}
+
 /** 予定を別の日（複数可）にコピーする */
 export async function duplicateItem(id: string, dates: string[]): Promise<void> {
   await db.transaction('rw', db.itineraryItems, db.trips, async () => {
@@ -74,7 +90,8 @@ export async function duplicateItem(id: string, dates: string[]): Promise<void> 
       const arrivalDate = src.arrivalDate ? addDays(date, daysBetween(src.date, src.arrivalDate)) : undefined;
       // 宿泊はチェックアウトの日も同じだけずらす
       const checkOutDate = src.checkOutDate ? addDays(date, daysBetween(src.date, src.checkOutDate)) : undefined;
-      await placeInDay({ ...src, id: newId(), date, arrivalDate, checkOutDate, order: 0 });
+      const { pinnedPos: _drop, ...rest } = src;
+      await placeInDay({ ...rest, id: newId(), date, arrivalDate, checkOutDate, order: 0 });
     }
   });
 }

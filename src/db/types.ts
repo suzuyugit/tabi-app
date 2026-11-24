@@ -41,6 +41,8 @@ export type ItineraryItem = {
   // 宿泊のときだけ使う（チェックインは date と time）
   checkOutDate?: string; // チェックアウトの日（YYYY-MM-DD）。泊数 = checkOutDate − date
   checkOutTime?: string; // HH:mm（現地時間）
+  /** 日をまたぐ移動・連泊の「続きのカード」を長押しで動かしたときの、その日の並びでの位置（日付 → 何番目か） */
+  pinnedPos?: Record<string, number>;
   memo?: string;
   estimatedCost?: number; // estimatedCurrency の最小単位
   estimatedCurrency?: string; // 予想費用の通貨（現地通貨か円）。未設定なら旅行の現地通貨

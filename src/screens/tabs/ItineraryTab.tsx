@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { ItineraryItem, Trip } from '../../db/types';
-import { deleteItem, reorderItems } from '../../db/itineraryRepo';
+import { deleteItem, pinContinuations, reorderItems } from '../../db/itineraryRepo';
 import { byOrder, continuesOn, insertIndex, itemIcon, itemKey, kindMeta, mapsUrl, nightsOf, routeUrl, stayOn, tripDays } from '../../lib/itinerary';
 import { dayShiftLabel, hasTimeDiff, localMinutes, nowWall, otherZoneTime } from '../../lib/timezone';
 import { formatMd } from '../../lib/date';
@@ -55,32 +55,20 @@ export function ItineraryTab({ trip }: Props) {
     .filter((it) => (current === OUTSIDE ? !dayDates.has(it.date) : it.date === current))
     .sort((a, b) => (current === OUTSIDE ? a.date.localeCompare(b.date) || byOrder(a, b) : byOrder(a, b)));
 
-  const trashRef = useRef<HTMLDivElement>(null);
-  const { bind, styleFor, draggingId, overTrash } = useLongPressReorder(
-    list.map((it) => it.id),
-    (ids) => reorderItems(ids),
-    {
-      trashRef,
-      onDelete: async (id) => {
-        const it = list.find((x) => x.id === id);
-        if (!it || !confirm(`「${it.title}」を削除しますか？`)) return;
-        await deleteItem(id);
-        showToast('予定を削除しました');
-      },
-    },
-  );
-
   const defaultDate = current === OUTSIDE ? (days[0]?.date ?? trip.startDate) : current;
   const today = nowWall(trip).date;
   const tzDiff = hasTimeDiff(trip);
 
   // 日をまたぐ移動・連泊の宿は、その後の日にも出す。並び替えの対象にはしない
-  type Row = { kind: 'item'; item: ItineraryItem; index: number } | { kind: 'cont'; item: ItineraryItem };
-  const rows: Row[] = list.map((item, index) => ({ kind: 'item', item, index }));
+  type Row = { kind: 'item'; item: ItineraryItem } | { kind: 'cont'; item: ItineraryItem };
+  const rows: Row[] = list.map((item) => ({ kind: 'item', item }));
   if (current !== OUTSIDE) {
     const keys = list.map((it) => itemKey(trip, it));
-    const conts = (data?.items ?? [])
-      .filter((it) => continuesOn(it, current) || stayOn(it, current))
+    const all = (data?.items ?? []).filter((it) => continuesOn(it, current) || stayOn(it, current));
+    // 長押しで動かした位置を覚えているカードは、あとでその位置に入れる
+    const pinned = all.filter((it) => it.pinnedPos?.[current] !== undefined);
+    const conts = all
+      .filter((it) => it.pinnedPos?.[current] === undefined)
       .map((it) => {
         const stay = stayOn(it, current);
         // 連泊の途中の日は「今夜の宿」として、その日のいちばん最後に出す
@@ -97,7 +85,40 @@ export function ItineraryTab({ trip }: Props) {
       .sort((a, b) => b.at - a.at || b.key - a.key);
     // 後ろから差し込むと位置がずれない
     for (const c of conts) rows.splice(c.at, 0, { kind: 'cont', item: c.it });
+    for (const it of pinned.sort((a, b) => a.pinnedPos![current] - b.pinnedPos![current])) {
+      rows.splice(Math.min(it.pinnedPos![current], rows.length), 0, { kind: 'cont', item: it });
+    }
   }
+
+  // 並び替え・削除は、続きのカードも含めた並びで行う（続きのカードは「cont:元の予定の ID」）
+  const CONT = 'cont:';
+  const rowKey = (r: Row) => (r.kind === 'item' ? r.item.id : `${CONT}${r.item.id}`);
+  const trashRef = useRef<HTMLDivElement>(null);
+  const { bind, styleFor, draggingId, overTrash } = useLongPressReorder(
+    rows.map(rowKey),
+    async (keys) => {
+      await reorderItems(keys.filter((k) => !k.startsWith(CONT)));
+      const positions = Object.fromEntries(
+        keys.flatMap((k, i) => (k.startsWith(CONT) ? [[k.slice(CONT.length), i] as const] : [])),
+      );
+      if (Object.keys(positions).length > 0) await pinContinuations(current, positions);
+    },
+    {
+      trashRef,
+      onDelete: async (key) => {
+        const isCont = key.startsWith(CONT);
+        const id = isCont ? key.slice(CONT.length) : key;
+        const it = (data?.items ?? []).find((x) => x.id === id);
+        if (!it) return;
+        const msg = isCont
+          ? `「${it.title}」（${formatMd(it.date)}の予定）を削除しますか？\n元の予定ごと、ほかの日の表示も消えます。`
+          : `「${it.title}」を削除しますか？`;
+        if (!confirm(msg)) return;
+        await deleteItem(id);
+        showToast('予定を削除しました');
+      },
+    },
+  );
 
   return (
     <>
@@ -128,12 +149,12 @@ export function ItineraryTab({ trip }: Props) {
       {tzDiff && rows.length > 0 && <p className="hint tz-note">時刻は「現地」「日本」の印がついた時間です</p>}
 
       <ul className="item-list">
-        {rows.map((row) =>
+        {rows.map((row, i) =>
           row.kind === 'item' ? (
             <li
               key={row.item.id}
               {...bind(row.item.id)}
-              style={styleFor(row.index)}
+              style={styleFor(i)}
               className={`item-card ${draggingId === row.item.id ? 'dragging' : ''}`}
               onClick={() => setEditing({ item: row.item })}
             >
@@ -149,8 +170,12 @@ export function ItineraryTab({ trip }: Props) {
             </li>
           ) : (
             <li
-              key={`cont-${row.item.id}`}
-              className={`item-card item-cont ${stayOn(row.item, current) === 'night' ? 'item-night' : ''}`}
+              key={rowKey(row)}
+              {...bind(rowKey(row))}
+              style={styleFor(i)}
+              className={`item-card item-cont ${stayOn(row.item, current) === 'night' ? 'item-night' : ''} ${
+                draggingId === rowKey(row) ? 'dragging' : ''
+              }`}
               onClick={() => setEditing({ item: row.item })}
             >
               {row.item.kind === 'stay' ? (
@@ -163,7 +188,7 @@ export function ItineraryTab({ trip }: Props) {
         )}
       </ul>
 
-      {list.length > 0 && <p className="hint center">長押しでつかむと、並び替え・削除ができます</p>}
+      {rows.length > 0 && <p className="hint center">長押しでつかむと、並び替え・削除ができます</p>}
 
       {/* つかんでいる間だけ出すゴミ箱 */}
       {draggingId && (
