@@ -153,7 +153,7 @@ function ItemCardBody({ item, actual, showDate, onMenu }: CardProps) {
     <>
       <div className="item-time">
         {showDate && <span className="item-date">{formatMd(item.date)}</span>}
-        {item.time ?? '--:--'}
+        {item.time ?? <span className="item-undecided">未定</span>}
         {item.kind === 'move' && item.arrivalTime && <span className="item-arrive">〜{item.arrivalTime}</span>}
       </div>
       <div className="item-main">

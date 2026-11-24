@@ -1267,3 +1267,38 @@ textarea {
 .route-sep {
   color: var(--muted);
 }
+
+/* --- 時刻「未定」 --- */
+.mini-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mini-check input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.time-undecided {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.item-undecided {
+  font-size: 13px;
+  color: var(--muted);
+}

@@ -24,12 +24,19 @@ export function byOrder(a: ItineraryItem, b: ItineraryItem): number {
 
 /**
  * 同じ日の予定（order 順・自分自身は含まない）のどこに入れるかを返す。
- * 時刻があれば「自分より遅い時刻の最初の予定」の前、なければ最後。
+ * - 時刻あり：自分より遅い時刻の最初の予定の前。なければ時刻のある最後の予定のすぐ後
+ *   （時刻「未定」の予定より上に入れる）
+ * - 時刻なし（未定）：最後
  */
 export function insertIndex(dayItems: Pick<ItineraryItem, 'time'>[], time: string | undefined): number {
   if (!time) return dayItems.length;
-  const i = dayItems.findIndex((it) => it.time !== undefined && it.time > time);
-  return i === -1 ? dayItems.length : i;
+  const later = dayItems.findIndex((it) => it.time !== undefined && it.time > time);
+  if (later !== -1) return later;
+  let lastTimed = -1;
+  dayItems.forEach((it, i) => {
+    if (it.time !== undefined) lastTimed = i;
+  });
+  return lastTimed + 1;
 }
 
 /** 配列の from 番目を to 番目に動かした新しい配列 */

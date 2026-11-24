@@ -261,7 +261,7 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
             <option value="">ひも付けない</option>
             {items?.map((it) => (
               <option key={it.id} value={it.id}>
-                {dayLabel.get(it.date) ?? formatMd(it.date)} {it.time ?? ''} {it.title}
+                {dayLabel.get(it.date) ?? formatMd(it.date)} {it.time ?? '未定'} {it.title}
               </option>
             ))}
           </select>

@@ -18,6 +18,11 @@ describe('itinerary', () => {
     expect(insertIndex(day, undefined)).toBe(3);
   });
 
+  it('insertIndex：最後に未定がまとまっていたら、その上に入れる', () => {
+    expect(insertIndex([{ time: '08:00' }, { time: undefined }], '12:00')).toBe(1);
+    expect(insertIndex([{ time: undefined }, { time: undefined }], '12:00')).toBe(0);
+  });
+
   it('moveItem', () => {
     expect(moveItem(['a', 'b', 'c', 'd'], 0, 2)).toEqual(['b', 'c', 'a', 'd']);
     expect(moveItem(['a', 'b', 'c', 'd'], 3, 1)).toEqual(['a', 'd', 'b', 'c']);

@@ -26,6 +26,8 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   const [transport, setTransport] = useState<Transport>(item?.transport ?? 'train');
   const [date, setDate] = useState(item?.date ?? defaultDate);
   const [time, setTime] = useState(item?.time ?? '');
+  // 編集で時刻が入っていない予定は「未定」として開く
+  const [undecided, setUndecided] = useState(item !== undefined && !item.time);
   const [arrivalTime, setArrivalTime] = useState(item?.arrivalTime ?? '');
   const [from, setFrom] = useState(item?.from ?? '');
   const [to, setTo] = useState(item?.to ?? '');
@@ -58,7 +60,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
     const input: ItemInput = {
       kind,
       date,
-      time: opt(time),
+      time: undecided ? undefined : opt(time),
       title: finalTitle,
       places: places.map((p) => p.trim()).filter(Boolean),
       ...move,
@@ -154,10 +156,20 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
               ))}
             </select>
           </label>
-          <label className="field">
-            <span className="label">{isMove ? '出発時刻' : '時刻'}</span>
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-          </label>
+          <div className="field">
+            <div className="label-row">
+              <span className="label">{isMove ? '出発時刻' : '時刻'}</span>
+              <label className="mini-check">
+                <input type="checkbox" checked={undecided} onChange={(e) => setUndecided(e.target.checked)} />
+                未定
+              </label>
+            </div>
+            {undecided ? (
+              <div className="time-undecided">未定</div>
+            ) : (
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label={isMove ? '出発時刻' : '時刻'} />
+            )}
+          </div>
         </div>
 
         {isMove && (
