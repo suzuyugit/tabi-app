@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { formatRange } from '../lib/date';
 import { navigate, type TabKey } from '../router';
+import { ItineraryTab } from './tabs/ItineraryTab';
 
 const TABS: { key: TabKey; label: string; icon: string; step: number }[] = [
   { key: 'itinerary', label: '旅程', icon: '🗓️', step: 2 },
@@ -44,12 +45,16 @@ export function TripScreen({ tripId, tab }: Props) {
       </header>
 
       <main className="content">
-        <div className="empty">
-          <p>
-            {current.icon} {current.label}タブ
-          </p>
-          <p className="muted">開発ステップ{current.step}で作ります。</p>
-        </div>
+        {tab === 'itinerary' ? (
+          <ItineraryTab trip={trip} />
+        ) : (
+          <div className="empty">
+            <p>
+              {current.icon} {current.label}タブ
+            </p>
+            <p className="muted">開発ステップ{current.step}で作ります。</p>
+          </div>
+        )}
       </main>
 
       <nav className="tabbar" aria-label="タブ">
