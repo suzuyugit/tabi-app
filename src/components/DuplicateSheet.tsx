@@ -20,6 +20,9 @@ export function DuplicateSheet({ trip, item, onClose }: Props) {
       return next;
     });
 
+  const allSelected = days.length > 0 && days.every((d) => selected.has(d.date));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(days.map((d) => d.date)));
+
   const save = async () => {
     await duplicateItem(item.id, [...selected]);
     showToast(`${selected.size}日分にコピーしました`);
@@ -43,6 +46,10 @@ export function DuplicateSheet({ trip, item, onClose }: Props) {
       {days.length === 0 ? (
         <p className="muted">ほかの日がありません。</p>
       ) : (
+        <>
+        <button type="button" className="btn btn-ghost btn-block select-all" onClick={toggleAll} aria-pressed={allSelected}>
+          {allSelected ? 'すべての選択を外す' : `ほかの日すべて（${days.length}日）を選ぶ`}
+        </button>
         <ul className="check-list">
           {days.map((d) => (
             <li key={d.date}>
@@ -55,6 +62,7 @@ export function DuplicateSheet({ trip, item, onClose }: Props) {
             </li>
           ))}
         </ul>
+        </>
       )}
     </Sheet>
   );

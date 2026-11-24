@@ -1606,3 +1606,7 @@ textarea {
 .item-night-icon {
   font-size: 22px;
 }
+
+.select-all {
+  margin-top: 12px;
+}
