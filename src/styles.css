@@ -2160,3 +2160,69 @@ textarea {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* --- 当日モード --- */
+.today-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--primary-weak);
+}
+
+.today-now {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.today-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.today-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.today-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.today-title {
+  font-weight: 700;
+}
+
+.today-left {
+  font-weight: 800;
+  color: var(--primary);
+  font-size: 18px;
+}
+
+.shift-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.shift-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shift-custom input {
+  width: 80px;
+  text-align: right;
+}

@@ -57,3 +57,18 @@ export function hmToMinutes(hm: string): number {
   const [h, m] = hm.split(':').map(Number);
   return h * 60 + m;
 }
+
+/** 'HH:mm' に分を足す。0:00〜23:59 からはみ出したら端で止め、clamped = true */
+export function addMinutesHm(hm: string, delta: number): { time: string; clamped: boolean } {
+  const m = hmToMinutes(hm) + delta;
+  const c = Math.min(Math.max(m, 0), 23 * 60 + 59);
+  return { time: `${pad(Math.floor(c / 60))}:${pad(c % 60)}`, clamped: c !== m };
+}
+
+/** 分 → 「40分」「1時間20分」 */
+export function formatDuration(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}分`;
+  return m === 0 ? `${h}時間` : `${h}時間${m}分`;
+}

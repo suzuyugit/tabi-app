@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
-import { createItem, deleteItem, duplicateItem, pinContinuations, reorderItems, updateItem } from './itineraryRepo';
+import { createItem, deleteItem, duplicateItem, pinContinuations, reorderItems, shiftItems, updateItem } from './itineraryRepo';
+import { upcomingItems } from '../lib/itinerary';
 
 const T = 'trip1';
 const titles = async (date: string) =>
@@ -93,5 +94,34 @@ describe('itineraryRepo', () => {
     expect((await db.itineraryItems.get(id))!.pinnedPos).toEqual({ '2026-12-03': 2 });
     await updateItem(id, { ...input, checkOutTime: '10:00' });
     expect((await db.itineraryItems.get(id))!.pinnedPos).toBeUndefined();
+  });
+
+  it('当日モード：「以降を○分ずらす」で、その日の後の予定だけがずれる', async () => {
+    const mk = (date: string, time: string | undefined, title: string, extra = {}) =>
+      createItem(T, { kind: 'other', places: [], date, time, title, ...extra });
+    await mk('2026-12-01', '09:00', '朝食');
+    await mk('2026-12-01', '12:00', '昼食');
+    await mk('2026-12-01', '15:00', 'バス', { kind: 'move', arrivalTime: '16:00' });
+    await mk('2026-12-01', undefined, '未定のメモ');
+    await mk('2026-12-02', '12:00', '翌日の昼食');
+    const day = await db.itineraryItems.where('[tripId+date]').equals([T, '2026-12-01']).toArray();
+    // 今 11:00 → 12:00 と 15:00 の予定が対象（未定と 9:00 は対象外）
+    const up = upcomingItems({}, day, 11 * 60);
+    expect(up.map((u) => u.it.title)).toEqual(['昼食', 'バス']);
+    await shiftItems(up.map((u) => u.it.id), 30);
+    const after = await db.itineraryItems.toArray();
+    const t = (title: string) => after.find((x) => x.title === title)!;
+    expect([t('朝食').time, t('昼食').time, t('バス').time, t('バス').arrivalTime]).toEqual(['09:00', '12:30', '15:30', '16:30']);
+    expect(t('未定のメモ').time).toBeUndefined();
+    expect(t('翌日の昼食').time).toBe('12:00');
+    // 並び順は変わらない
+    expect(await titles('2026-12-01')).toEqual(['朝食', '昼食', 'バス', '未定のメモ']);
+  });
+
+  it('当日モード：23:59 を超える分は端で止める', async () => {
+    const id = await createItem(T, { kind: 'other', places: [], date: '2026-12-01', time: '23:40', title: '夜食' });
+    const r = await shiftItems([id], 30);
+    expect(r.clamped).toBe(1);
+    expect((await db.itineraryItems.get(id))!.time).toBe('23:59');
   });
 });

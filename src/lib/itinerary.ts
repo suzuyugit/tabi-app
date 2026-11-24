@@ -152,3 +152,15 @@ export function fallbackTitle(item: Pick<ItineraryItem, 'kind' | 'transport' | '
   if (item.kind === 'move') return transportMeta(item.transport).label;
   return kindMeta(item.kind, kinds).name;
 }
+
+/** その日の予定のうち、今（現地の 0時からの分）より後のもの。時刻の早い順 */
+export function upcomingItems<T extends Pick<ItineraryItem, 'date' | 'time' | 'timeIn'>>(
+  trip: Pick<Trip, 'timeZone'>,
+  dayItems: T[],
+  nowMin: number,
+): { it: T; key: number }[] {
+  return dayItems
+    .map((it) => ({ it, key: itemKey(trip, it) }))
+    .filter((x): x is { it: T; key: number } => x.key !== undefined && x.key >= nowMin)
+    .sort((a, b) => a.key - b.key);
+}

@@ -2,6 +2,7 @@ import { db } from './db';
 import type { ItineraryItem } from './types';
 import { addDays, byOrder, daysBetween, insertIndex, itemKey } from '../lib/itinerary';
 import { newId } from '../lib/id';
+import { addMinutesHm } from '../lib/datetime';
 
 export type ItemInput = Omit<ItineraryItem, 'id' | 'tripId' | 'order'>;
 
@@ -94,4 +95,29 @@ export async function duplicateItem(id: string, dates: string[]): Promise<void> 
       await placeInDay({ ...rest, id: newId(), date, arrivalDate, checkOutDate, order: 0 });
     }
   });
+}
+
+/**
+ * 当日モードの「以降を○分ずらす」。ids の予定の時刻を delta 分ずらす（並び順はそのまま）。
+ * 移動は、その日に着く到着時刻も一緒にずらす。0:00〜23:59 からはみ出す分は端で止め、その件数を返す
+ */
+export async function shiftItems(ids: string[], delta: number): Promise<{ shifted: number; clamped: number }> {
+  let shifted = 0;
+  let clamped = 0;
+  await db.transaction('rw', db.itineraryItems, async () => {
+    for (const it of await db.itineraryItems.bulkGet(ids)) {
+      if (!it?.time) continue;
+      const t = addMinutesHm(it.time, delta);
+      const next = { ...it, time: t.time };
+      if (t.clamped) clamped++;
+      if (it.kind === 'move' && it.arrivalTime && (!it.arrivalDate || it.arrivalDate === it.date)) {
+        const a = addMinutesHm(it.arrivalTime, delta);
+        next.arrivalTime = a.time;
+        if (a.clamped) clamped++;
+      }
+      await db.itineraryItems.put(next);
+      shifted++;
+    }
+  });
+  return { shifted, clamped };
 }

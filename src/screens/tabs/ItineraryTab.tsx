@@ -13,6 +13,7 @@ import { copyText } from '../../lib/clipboard';
 import { useLongPressReorder } from '../../hooks/useLongPressReorder';
 import { KindsContext, useItemKinds, useKindsContext } from '../../hooks/useKinds';
 import { ItemSheet } from '../../components/ItemSheet';
+import { TodayPanel } from '../../components/TodayPanel';
 import { DuplicateSheet } from '../../components/DuplicateSheet';
 import { Sheet } from '../../components/Sheet';
 import { showToast } from '../../components/Toast';
@@ -146,6 +147,8 @@ export function ItineraryTab({ trip }: Props) {
           </button>
         )}
       </nav>
+
+      {current === today && <TodayPanel trip={trip} dayItems={list} />}
 
       {data && rows.length === 0 && <p className="empty">この日の予定はまだありません。</p>}
       {tzDiff && rows.length > 0 && <p className="hint tz-note">時刻は「現地」「日本」の印がついた時間です</p>}
