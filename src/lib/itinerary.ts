@@ -1,6 +1,7 @@
 import type { ItemKind, ItineraryItem, Transport, Trip } from '../db/types';
 import { formatMd, parseYmd, toYmd } from './date';
 import { hmToMinutes } from './datetime';
+import { localMinutes } from './timezone';
 
 export type TripDay = { date: string; index: number; label: string; sub: string };
 
@@ -23,20 +24,41 @@ export function byOrder(a: ItineraryItem, b: ItineraryItem): number {
 }
 
 /**
- * 同じ日の予定（order 順・自分自身は含まない）のどこに入れるかを返す。
- * - 時刻あり：自分より遅い時刻の最初の予定の前。なければ時刻のある最後の予定のすぐ後
- *   （時刻「未定」の予定より上に入れる）
+ * 同じ日の並び（order 順・自分自身は含まない）のどこに入れるかを返す。key は時刻を分にしたもの（未定は undefined）。
+ * - 時刻あり：自分より遅い最初の予定の前。なければ時刻のある最後の予定のすぐ後（時刻「未定」より上）
  * - 時刻なし（未定）：最後
  */
-export function insertIndex(dayItems: Pick<ItineraryItem, 'time'>[], time: string | undefined): number {
-  if (!time) return dayItems.length;
-  const later = dayItems.findIndex((it) => it.time !== undefined && it.time > time);
+export function insertIndex(dayKeys: (number | undefined)[], key: number | undefined): number {
+  if (key === undefined) return dayKeys.length;
+  const later = dayKeys.findIndex((k) => k !== undefined && k > key);
   if (later !== -1) return later;
   let lastTimed = -1;
-  dayItems.forEach((it, i) => {
-    if (it.time !== undefined) lastTimed = i;
+  dayKeys.forEach((k, i) => {
+    if (k !== undefined) lastTimed = i;
   });
   return lastTimed + 1;
+}
+
+/** 並べ替え用の時刻キー（その予定の日の現地 0時からの分。時差を考える） */
+export function itemKey(trip: Pick<Trip, 'timeZone'>, item: Pick<ItineraryItem, 'date' | 'time' | 'timeIn'>): number | undefined {
+  return item.time ? localMinutes(trip, item.date, item.date, item.time, item.timeIn) : undefined;
+}
+
+/** 日付に days 日足す */
+export function addDays(ymd: string, days: number): string {
+  const d = parseYmd(ymd);
+  d.setDate(d.getDate() + days);
+  return toYmd(d);
+}
+
+/** 2つの日付の差（日） */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((parseYmd(to).getTime() - parseYmd(from).getTime()) / 86_400_000);
+}
+
+/** 日をまたぐ移動の、到着日の前後にある日（その日の旅程にも出す日）か */
+export function continuesOn(item: Pick<ItineraryItem, 'kind' | 'date' | 'arrivalDate'>, day: string): boolean {
+  return item.kind === 'move' && !!item.arrivalDate && item.date < day && day <= item.arrivalDate;
 }
 
 /** 配列の from 番目を to 番目に動かした新しい配列 */

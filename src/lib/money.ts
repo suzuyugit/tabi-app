@@ -28,7 +28,13 @@ export type MoneySummary = {
 };
 
 /** 合計・カテゴリ別・日別（すべて表示通貨の最小単位） */
-export function summarize(expenses: Expense[], mode: ViewMode, meId: string, display: string, trip: TripMoney): MoneySummary {
+export function summarize(
+  expenses: Expense[],
+  mode: ViewMode,
+  meId: string,
+  display: string,
+  trip: TripMoney & Pick<Trip, 'timeZone'>,
+): MoneySummary {
   const byCategory = new Map<string, number>();
   const byDay = new Map<string, number>();
   let total = 0;
@@ -36,7 +42,7 @@ export function summarize(expenses: Expense[], mode: ViewMode, meId: string, dis
     const v = valueIn(e, mode, meId, display, trip);
     total += v;
     byCategory.set(e.categoryId, (byCategory.get(e.categoryId) ?? 0) + v);
-    const day = isoDate(e.datetime);
+    const day = isoDate(e.datetime, trip.timeZone); // 日付は現地の日付で分ける
     byDay.set(day, (byDay.get(day) ?? 0) + v);
   }
   return { total, byCategory, byDay };

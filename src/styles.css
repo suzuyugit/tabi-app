@@ -1361,13 +1361,70 @@ textarea {
   color: var(--muted);
 }
 
-.money-toolbar {
-  display: grid;
-  gap: 8px;
-}
 
 .expense-conv {
   font-size: 11px;
   font-weight: 600;
+  color: var(--muted);
+}
+
+/* --- 時差・日をまたぐ移動 --- */
+.item-time {
+  width: 56px;
+}
+
+.tz-badge {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--primary-weak);
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.6;
+  vertical-align: middle;
+}
+
+.tz-badge.jp {
+  background: var(--danger-weak);
+  color: var(--danger);
+}
+
+.item-time > .tz-badge {
+  display: block;
+  width: fit-content;
+  margin: 2px 0 0;
+}
+
+.item-tz {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tz-note {
+  margin: -6px 0 10px;
+}
+
+.zone-toggle {
+  margin-top: 2px;
+}
+
+.item-cont {
+  border-style: dashed;
+  background: transparent;
+}
+
+.item-cont-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.item-arrive-label {
+  display: block;
+  font-size: 11px;
   color: var(--muted);
 }

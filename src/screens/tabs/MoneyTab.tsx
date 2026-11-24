@@ -2,14 +2,13 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { Category, Expense, Trip } from '../../db/types';
-import { cashRemaining, expenseCurrency, summarize, valueIn, type ViewMode } from '../../lib/money';
+import { cashRemaining, expenseCurrency, summarize, valueIn } from '../../lib/money';
 import { convert, formatMoney, isForeign, JPY, tripCurrency } from '../../lib/currency';
 import { isoDate, isoTime } from '../../lib/datetime';
 import { formatMd } from '../../lib/date';
 import { tripDays } from '../../lib/itinerary';
 import { PAYMENT_LABEL } from '../../lib/split';
 
-const VIEW_KEY = 'tabi.moneyView';
 const CUR_KEY = 'tabi.moneyCurrency';
 
 function load(key: string): string | null {
@@ -31,7 +30,8 @@ function save(key: string, v: string) {
 type Props = { trip: Trip; onEdit: (e: Expense) => void };
 
 export function MoneyTab({ trip, onEdit }: Props) {
-  const [mode, setModeState] = useState<ViewMode>(() => (load(VIEW_KEY) === 'group' ? 'group' : 'me'));
+  // 見るのは自分の負担分だけ（グループ全体の額は精算タブで見る）
+  const mode = 'me' as const;
   // 表示する通貨：海外の旅行では「現地通貨」と「円」を切り替えられる（最初は現地通貨）
   const [showYen, setShowYenState] = useState(() => load(CUR_KEY) === 'JPY');
   const [dayFilter, setDayFilter] = useState('');
@@ -42,10 +42,6 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const display = foreign && !showYen ? local : JPY;
   const fmt = (minor: number) => formatMoney(minor, display);
 
-  const setMode = (m: ViewMode) => {
-    setModeState(m);
-    save(VIEW_KEY, m);
-  };
   const setShowYen = (v: boolean) => {
     setShowYenState(v);
     save(CUR_KEY, v ? JPY : 'local');
@@ -68,7 +64,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
   if (!data || !summary) return null;
 
   // 予算は自分の分（円で持っている）。グループ全体の表示では予算と比べない
-  const budget = mode === 'me' && trip.budget > 0 ? convert(trip.budget, JPY, display, trip) : 0;
+  const budget = trip.budget > 0 ? convert(trip.budget, JPY, display, trip) : 0;
   const over = budget > 0 && summary.total > budget;
   const cash = cashRemaining(trip, data.expenses);
 
@@ -90,7 +86,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const dayMax = Math.max(1, ...dayRows.map((r) => r.value));
 
   const filtered = data.expenses.filter(
-    (e) => (!dayFilter || isoDate(e.datetime) === dayFilter) && (!catFilter || e.categoryId === catFilter),
+    (e) => (!dayFilter || isoDate(e.datetime, trip.timeZone) === dayFilter) && (!catFilter || e.categoryId === catFilter),
   );
   const filteredTotal = filtered.reduce((a, e) => a + valueIn(e, mode, meId, display, trip), 0);
   const nameOf = (id: string) => trip.members.find((m) => m.id === id)?.name ?? '?';
@@ -100,29 +96,19 @@ export function MoneyTab({ trip, onEdit }: Props) {
 
   return (
     <div className="money">
-      <div className="money-toolbar">
-        <div className="seg" role="tablist" aria-label="表示">
-          <button role="tab" aria-selected={mode === 'me'} className={mode === 'me' ? 'active' : ''} onClick={() => setMode('me')}>
-            自分の負担分
+      {foreign && (
+        <div className="seg" role="tablist" aria-label="表示する通貨">
+          <button role="tab" aria-selected={!showYen} className={!showYen ? 'active' : ''} onClick={() => setShowYen(false)}>
+            {local}で見る
           </button>
-          <button role="tab" aria-selected={mode === 'group'} className={mode === 'group' ? 'active' : ''} onClick={() => setMode('group')}>
-            グループ全体
+          <button role="tab" aria-selected={showYen} className={showYen ? 'active' : ''} onClick={() => setShowYen(true)}>
+            円で見る
           </button>
         </div>
-        {foreign && (
-          <div className="seg seg-small" role="tablist" aria-label="表示する通貨">
-            <button role="tab" aria-selected={!showYen} className={!showYen ? 'active' : ''} onClick={() => setShowYen(false)}>
-              {local}で見る
-            </button>
-            <button role="tab" aria-selected={showYen} className={showYen ? 'active' : ''} onClick={() => setShowYen(true)}>
-              円で見る
-            </button>
-          </div>
-        )}
-      </div>
+      )}
 
       <section className="card">
-        <div className="card-label">{mode === 'group' ? '使った額（グループ全体）' : '自分の負担分'}</div>
+        <div className="card-label">自分の負担分</div>
         <div className="hero">
           <span className={`hero-num ${over ? 'over' : ''}`}>{fmt(summary.total)}</span>
           {budget > 0 && <span className="muted"> / {fmt(budget)}</span>}
@@ -143,10 +129,8 @@ export function MoneyTab({ trip, onEdit }: Props) {
               {display !== JPY && <span className="muted small">（予算 {formatMoney(trip.budget)}）</span>}
             </div>
           </>
-        ) : mode === 'me' ? (
-          <div className="muted small">予算は旅行の編集画面で設定できます</div>
         ) : (
-          trip.budget > 0 && <div className="muted small">予算（自分の分）は「自分の負担分」で見られます</div>
+          <div className="muted small">予算は旅行の編集画面で設定できます</div>
         )}
       </section>
 
@@ -245,7 +229,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
                     <span className="expense-main">
                       <span className="expense-title">{e.memo || cat?.name || '支出'}</span>
                       <span className="expense-sub">
-                        {formatMd(isoDate(e.datetime))} {isoTime(e.datetime)}・{nameOf(e.paidBy)}が{PAYMENT_LABEL[e.paymentMethod]}
+                        {formatMd(isoDate(e.datetime, trip.timeZone))} {isoTime(e.datetime, trip.timeZone)}・{nameOf(e.paidBy)}が{PAYMENT_LABEL[e.paymentMethod]}
                         {e.splitAmong.length < trip.members.length && `・${e.splitAmong.length}人で割り勘`}
                         {item && `・📍${item.title}`}
                       </span>
@@ -253,7 +237,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
                     <span className="expense-amount">
                       {formatMoney(e.amount, cur)}
                       {cur !== display && <span className="expense-conv">≈ {fmt(convert(e.amount, cur, display, trip))}</span>}
-                      {mode === 'me' && <span className="expense-mine">自分 {fmt(valueIn(e, 'me', meId, display, trip))}</span>}
+                      <span className="expense-mine">自分 {fmt(valueIn(e, 'me', meId, display, trip))}</span>
                     </span>
                   </button>
                 </li>

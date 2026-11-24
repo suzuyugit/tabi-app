@@ -3,8 +3,9 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { ItineraryItem, Trip } from '../../db/types';
 import { deleteItem, reorderItems } from '../../db/itineraryRepo';
-import { byOrder, itemIcon, kindMeta, mapsUrl, routeUrl, tripDays } from '../../lib/itinerary';
-import { formatMd, todayYmd } from '../../lib/date';
+import { byOrder, continuesOn, insertIndex, itemIcon, itemKey, kindMeta, mapsUrl, routeUrl, tripDays } from '../../lib/itinerary';
+import { dayShiftLabel, hasTimeDiff, localMinutes, nowWall, otherZoneTime } from '../../lib/timezone';
+import { formatMd } from '../../lib/date';
 import { convert, formatMoney, tripCurrency } from '../../lib/currency';
 import { expenseCurrency } from '../../lib/money';
 import { copyText } from '../../lib/clipboard';
@@ -21,8 +22,8 @@ type Props = { trip: Trip };
 export function ItineraryTab({ trip }: Props) {
   const days = useMemo(() => tripDays(trip), [trip]);
   const [selected, setSelected] = useState(() => {
-    // 旅行中は今日のタブを最初に開く
-    const today = todayYmd();
+    // 旅行中は今日（現地の日付）のタブを最初に開く
+    const today = nowWall(trip).date;
     return days.some((d) => d.date === today) ? today : (days[0]?.date ?? OUTSIDE);
   });
   const [editing, setEditing] = useState<{ item?: ItineraryItem } | null>(null);
@@ -58,6 +59,25 @@ export function ItineraryTab({ trip }: Props) {
   );
 
   const defaultDate = current === OUTSIDE ? (days[0]?.date ?? trip.startDate) : current;
+  const today = nowWall(trip).date;
+  const tzDiff = hasTimeDiff(trip);
+
+  // 日をまたぐ移動は、到着する日（と途中の日）にも出す。並び替えの対象にはしない
+  type Row = { kind: 'item'; item: ItineraryItem; index: number } | { kind: 'cont'; item: ItineraryItem };
+  const rows: Row[] = list.map((item, index) => ({ kind: 'item', item, index }));
+  if (current !== OUTSIDE) {
+    const keys = list.map((it) => itemKey(trip, it));
+    const conts = (data?.items ?? [])
+      .filter((it) => continuesOn(it, current))
+      .map((it) => {
+        const onArrivalDay = it.arrivalDate === current && it.arrivalTime;
+        const key = onArrivalDay ? localMinutes(trip, current, it.arrivalDate!, it.arrivalTime!, it.arrivalIn) : -Infinity;
+        return { it, at: key === -Infinity ? 0 : insertIndex(keys, key), key };
+      })
+      .sort((a, b) => b.at - a.at || b.key - a.key);
+    // 後ろから差し込むと位置がずれない
+    for (const c of conts) rows.splice(c.at, 0, { kind: 'cont', item: c.it });
+  }
 
   return (
     <>
@@ -72,7 +92,7 @@ export function ItineraryTab({ trip }: Props) {
             <span className="day-tab-label">{d.label}</span>
             <span className="day-tab-sub">
               {d.sub}
-              {d.date === todayYmd() && ' 今日'}
+              {d.date === today && ' 今日'}
             </span>
           </button>
         ))}
@@ -84,20 +104,35 @@ export function ItineraryTab({ trip }: Props) {
         )}
       </nav>
 
-      {data && list.length === 0 && <p className="empty">この日の予定はまだありません。</p>}
+      {data && rows.length === 0 && <p className="empty">この日の予定はまだありません。</p>}
+      {tzDiff && rows.length > 0 && <p className="hint tz-note">時刻は「現地」「日本」の印がついた時間です</p>}
 
       <ul className="item-list">
-        {list.map((it, i) => (
-          <li
-            key={it.id}
-            {...bind(it.id)}
-            style={styleFor(i)}
-            className={`item-card ${draggingId === it.id ? 'dragging' : ''}`}
-            onClick={() => setEditing({ item: it })}
-          >
-            <ItemCardBody item={it} currency={tripCurrency(trip)} actual={data?.actual.get(it.id)} showDate={current === OUTSIDE} onMenu={() => setMenuFor(it)} />
-          </li>
-        ))}
+        {rows.map((row) =>
+          row.kind === 'item' ? (
+            <li
+              key={row.item.id}
+              {...bind(row.item.id)}
+              style={styleFor(row.index)}
+              className={`item-card ${draggingId === row.item.id ? 'dragging' : ''}`}
+              onClick={() => setEditing({ item: row.item })}
+            >
+              <ItemCardBody
+                item={row.item}
+                trip={trip}
+                tzDiff={tzDiff}
+                currency={tripCurrency(trip)}
+                actual={data?.actual.get(row.item.id)}
+                showDate={current === OUTSIDE}
+                onMenu={() => setMenuFor(row.item)}
+              />
+            </li>
+          ) : (
+            <li key={`cont-${row.item.id}`} className="item-card item-cont" onClick={() => setEditing({ item: row.item })}>
+              <ContinuationBody item={row.item} day={current} tzDiff={tzDiff} />
+            </li>
+          ),
+        )}
       </ul>
 
       {list.length > 1 && <p className="hint center">長押しで並び替えできます</p>}
@@ -149,9 +184,28 @@ export function ItineraryTab({ trip }: Props) {
   );
 }
 
-type CardProps = { item: ItineraryItem; currency: string; actual?: number; showDate: boolean; onMenu: () => void };
+type CardProps = {
+  item: ItineraryItem;
+  trip: Trip;
+  tzDiff: boolean;
+  currency: string;
+  actual?: number;
+  showDate: boolean;
+  onMenu: () => void;
+};
 
-function ItemCardBody({ item, currency, actual, showDate, onMenu }: CardProps) {
+/** 時刻の横の「現地」「日本」の印 */
+function ZoneBadge({ side }: { side: 'local' | 'japan' | undefined }) {
+  return <span className={`tz-badge ${side === 'japan' ? 'jp' : ''}`}>{side === 'japan' ? '日本' : '現地'}</span>;
+}
+
+/** もう片方の時間帯での時刻。例：「日本時間 05:00（翌日）」 */
+function otherText(trip: Trip, date: string, time: string, side: 'local' | 'japan' | undefined): string {
+  const o = otherZoneTime(trip, date, time, side);
+  return `${o.label} ${o.time}${o.shift ? `（${o.shift}）` : ''}`;
+}
+
+function ItemCardBody({ item, trip, tzDiff, currency, actual, showDate, onMenu }: CardProps) {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   const over = actual !== undefined && item.estimatedCost !== undefined && actual > item.estimatedCost;
 
@@ -160,7 +214,14 @@ function ItemCardBody({ item, currency, actual, showDate, onMenu }: CardProps) {
       <div className="item-time">
         {showDate && <span className="item-date">{formatMd(item.date)}</span>}
         {item.time ?? <span className="item-undecided">未定</span>}
-        {item.kind === 'move' && item.arrivalTime && <span className="item-arrive">〜{item.arrivalTime}</span>}
+        {tzDiff && item.time && <ZoneBadge side={item.timeIn} />}
+        {item.kind === 'move' && item.arrivalTime && (
+          <span className="item-arrive">
+            〜{item.arrivalDate && item.arrivalDate !== item.date ? `${dayShiftLabel(item.date, item.arrivalDate)} ` : ''}
+            {item.arrivalTime}
+            {tzDiff && <ZoneBadge side={item.arrivalIn} />}
+          </span>
+        )}
       </div>
       <div className="item-main">
         <div className="item-title-row">
@@ -183,6 +244,16 @@ function ItemCardBody({ item, currency, actual, showDate, onMenu }: CardProps) {
             ⋯
           </button>
         </div>
+        {tzDiff && (item.time || (item.kind === 'move' && item.arrivalTime)) && (
+          <div className="item-tz">
+            {item.time && <span>{otherText(trip, item.date, item.time, item.timeIn)}</span>}
+            {item.kind === 'move' && item.arrivalTime && (
+              <span>
+                着 {otherText(trip, item.arrivalDate ?? item.date, item.arrivalTime, item.arrivalIn)}
+              </span>
+            )}
+          </div>
+        )}
         {item.kind === 'move' && (item.from || item.to) && (
           <div className="item-route">
             <span className="route-text">
@@ -249,5 +320,43 @@ function PlaceLink({ place }: { place: string }) {
     <a className="route-place" href={mapsUrl(place)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
       {place}
     </a>
+  );
+}
+
+/** 日をまたぐ移動の、到着日（と途中の日）に出すカード */
+function ContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day: string; tzDiff: boolean }) {
+  const arriving = item.arrivalDate === day;
+  return (
+    <>
+      <div className="item-time">
+        {arriving && item.arrivalTime ? (
+          <>
+            <span className="item-arrive-label">着</span>
+            {item.arrivalTime}
+            {tzDiff && <ZoneBadge side={item.arrivalIn} />}
+          </>
+        ) : (
+          <span className="item-undecided">{arriving ? '到着' : '終日'}</span>
+        )}
+      </div>
+      <div className="item-main">
+        <div className="item-title-row">
+          <span className="item-title">
+            <span className="item-kind">{itemIcon(item)}</span>
+            {item.title}
+          </span>
+        </div>
+        <div className="item-cont-note">
+          {formatMd(item.date)} {item.time ?? ''} 出発の続き{arriving ? '（この日に到着）' : '（移動中）'}
+        </div>
+        {(item.from || item.to) && (
+          <div className="route-text">
+            {item.from}
+            <span className="route-sep">→</span>
+            {item.to}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

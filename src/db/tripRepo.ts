@@ -66,7 +66,7 @@ export async function updateTrip(id: string, input: TripInput): Promise<void> {
       const blocked = removed.filter((m) => expenses.some((e) => involves(e, m.id)));
       if (blocked.length > 0) throw new MemberInUseError(blocked.map((m) => m.name));
     }
-    await db.trips.put({ ...current, ...input, cashOnHand: input.cashOnHand, currency: input.currency, rate: input.rate });
+    await db.trips.put({ ...current, ...input, cashOnHand: input.cashOnHand, currency: input.currency, rate: input.rate, timeZone: input.timeZone });
   });
 }
 

@@ -38,6 +38,7 @@ export type TripInput = {
   cashOnHand?: number;
   currency?: string;
   rate?: number;
+  timeZone?: string;
 };
 
 /** 入力チェック。問題があればエラーメッセージの配列を返す（空なら OK） */

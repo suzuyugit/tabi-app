@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fallbackTitle, insertIndex, itemIcon, moveItem, nearestItem, normalizeUrl, routeUrl, tripDays } from './itinerary';
+import { continuesOn, fallbackTitle, insertIndex, itemIcon, moveItem, nearestItem, normalizeUrl, routeUrl, tripDays } from './itinerary';
 
 describe('itinerary', () => {
   it('tripDays：月をまたぐ', () => {
@@ -11,16 +11,16 @@ describe('itinerary', () => {
   });
 
   it('insertIndex：時刻順の位置。時刻なしは最後', () => {
-    const day = [{ time: '09:00' }, { time: undefined }, { time: '12:00' }];
-    expect(insertIndex(day, '10:00')).toBe(2);
-    expect(insertIndex(day, '08:00')).toBe(0);
-    expect(insertIndex(day, '13:00')).toBe(3);
+    const day = [540, undefined, 720];
+    expect(insertIndex(day, 600)).toBe(2);
+    expect(insertIndex(day, 480)).toBe(0);
+    expect(insertIndex(day, 780)).toBe(3);
     expect(insertIndex(day, undefined)).toBe(3);
   });
 
   it('insertIndex：最後に未定がまとまっていたら、その上に入れる', () => {
-    expect(insertIndex([{ time: '08:00' }, { time: undefined }], '12:00')).toBe(1);
-    expect(insertIndex([{ time: undefined }, { time: undefined }], '12:00')).toBe(0);
+    expect(insertIndex([480, undefined], 720)).toBe(1);
+    expect(insertIndex([undefined, undefined], 720)).toBe(0);
   });
 
   it('moveItem', () => {
@@ -55,5 +55,14 @@ describe('itinerary', () => {
     expect(u.searchParams.get('destination')).toBe('新千歳空港');
     expect(u.searchParams.get('travelmode')).toBe('driving');
     expect(new URL(routeUrl('a', 'b', 'plane')).searchParams.get('travelmode')).toBe('transit');
+  });
+
+  it('continuesOn：日をまたぐ移動は到着日と途中の日にも出す', () => {
+    const ship = { kind: 'move' as const, date: '2026-12-01', arrivalDate: '2026-12-03' };
+    expect(continuesOn(ship, '2026-12-01')).toBe(false);
+    expect(continuesOn(ship, '2026-12-02')).toBe(true);
+    expect(continuesOn(ship, '2026-12-03')).toBe(true);
+    expect(continuesOn(ship, '2026-12-04')).toBe(false);
+    expect(continuesOn({ ...ship, kind: 'food' as const }, '2026-12-02')).toBe(false);
   });
 });

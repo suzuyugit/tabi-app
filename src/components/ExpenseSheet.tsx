@@ -5,6 +5,7 @@ import type { Expense, PaymentMethod, Trip } from '../db/types';
 import { deleteExpense, lastPaymentMethod, saveExpense, type ExpenseInput } from '../db/expenseRepo';
 import { inputToIso, isoToInput, nowIso } from '../lib/datetime';
 import { byOrder, nearestItem, tripDays } from '../lib/itinerary';
+import { hasTimeDiff, nowWall } from '../lib/timezone';
 import { formatMd } from '../lib/date';
 import { convert, currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
 import { expenseCurrency } from '../lib/money';
@@ -32,7 +33,9 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
   );
   const [itemId, setItemId] = useState(expense?.itemId ?? '');
   const [memo, setMemo] = useState(expense?.memo ?? '');
-  const [datetime, setDatetime] = useState(() => isoToInput(expense?.datetime ?? nowIso()));
+  // 時差のある旅行では、日時は現地時間で入れる
+  const tz = trip.timeZone;
+  const [datetime, setDatetime] = useState(() => isoToInput(expense?.datetime ?? nowIso(tz), tz));
   const [error, setError] = useState('');
 
   // よく使う順（同じなら初期値の順）
@@ -48,7 +51,11 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
     [trip.id],
   );
   // 今の時刻にいちばん近い今日の予定（自動ではひも付けない）
-  const suggestion = useMemo(() => (expense || !items ? undefined : nearestItem(items, new Date())), [expense, items]);
+  const suggestion = useMemo(() => {
+    if (expense || !items) return undefined;
+    const w = nowWall(trip); // 現地の今
+    return nearestItem(items, new Date(`${w.date}T${w.time}`));
+  }, [expense, items, trip]);
 
   const amountNum = parseMoneyInput(amount, currency);
   const amountOk = amountNum !== undefined && !Number.isNaN(amountNum);
@@ -77,7 +84,7 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
       categoryId,
       paymentMethod,
       memo: memo.trim() || undefined,
-      datetime: inputToIso(datetime) ?? nowIso(),
+      datetime: inputToIso(datetime, tz) ?? nowIso(tz),
       itemId: itemId || undefined,
       paidBy,
       splitAmong,
@@ -303,7 +310,7 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
         </label>
 
         <label className="field">
-          <span className="label">日時</span>
+          <span className="label">日時{hasTimeDiff(trip) ? '（現地時間）' : ''}</span>
           <input type="datetime-local" value={datetime} onChange={(e) => setDatetime(e.target.value)} />
         </label>
 

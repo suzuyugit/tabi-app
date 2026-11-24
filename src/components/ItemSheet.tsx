@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { ItemKind, ItineraryItem, Transport, Trip } from '../db/types';
 import { createItem, deleteItem, updateItem, type ItemInput } from '../db/itineraryRepo';
-import { fallbackTitle, ITEM_KINDS, normalizeUrl, TRANSPORTS, tripDays } from '../lib/itinerary';
+import { addDays, daysBetween, fallbackTitle, ITEM_KINDS, normalizeUrl, TRANSPORTS, tripDays } from '../lib/itinerary';
+import { hasTimeDiff, otherZoneTime, wallToMs, zoneOf, type ZoneSide } from '../lib/timezone';
 import { formatMd } from '../lib/date';
 import { currencyInfo, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
 import { Sheet } from './Sheet';
@@ -29,6 +30,11 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   // 編集で時刻が入っていない予定は「未定」として開く
   const [undecided, setUndecided] = useState(item !== undefined && !item.time);
   const [arrivalTime, setArrivalTime] = useState(item?.arrivalTime ?? '');
+  // 到着日は「出発日から何日後か」で持つ（出発日を変えても一緒に動くように）
+  const [arrivalOffset, setArrivalOffset] = useState(item?.arrivalDate ? daysBetween(item.date, item.arrivalDate) : 0);
+  const tzDiff = hasTimeDiff(trip);
+  const [timeIn, setTimeIn] = useState<ZoneSide>(item?.timeIn ?? 'local');
+  const [arrivalIn, setArrivalIn] = useState<ZoneSide>(item?.arrivalIn ?? 'local');
   const [from, setFrom] = useState(item?.from ?? '');
   const [to, setTo] = useState(item?.to ?? '');
   // 移動でタイトルが自動の名前（「飛行機」など）のときは空欄から始める
@@ -54,7 +60,16 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
 
   const save = async () => {
     const costNum = parseMoneyInput(cost, local);
-    const move = isMove ? { transport, from: opt(from), to: opt(to), arrivalTime: opt(arrivalTime) } : {};
+    const move = isMove
+      ? {
+          transport,
+          from: opt(from),
+          to: opt(to),
+          arrivalTime: opt(arrivalTime),
+          arrivalDate: arrivalOffset !== 0 ? addDays(date, arrivalOffset) : undefined,
+          arrivalIn: tzDiff ? arrivalIn : undefined,
+        }
+      : {};
     const finalTitle = title.trim() || (isMove ? fallbackTitle({ kind, transport }) : '');
     if (!finalTitle) return setError('タイトルを入れてください');
     if (costNum !== undefined && Number.isNaN(costNum)) return setError('予想費用を正しく入れてください');
@@ -62,6 +77,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
       kind,
       date,
       time: undecided ? undefined : opt(time),
+      timeIn: tzDiff && !undecided && time ? timeIn : undefined,
       title: finalTitle,
       places: places.map((p) => p.trim()).filter(Boolean),
       ...move,
@@ -170,6 +186,8 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
             ) : (
               <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label={isMove ? '出発時刻' : '時刻'} />
             )}
+            {tzDiff && !undecided && <ZoneToggle value={timeIn} onChange={setTimeIn} label={isMove ? '出発時刻' : '時刻'} />}
+            {tzDiff && !undecided && time && <OtherZone text={otherZoneTime(trip, date, time, timeIn)} />}
           </div>
         </div>
 
@@ -182,16 +200,41 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
             <div className="route-arrow" aria-hidden="true">
               ↓
             </div>
+            <label className="field">
+              <span className="label">到着地</span>
+              <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="例：新千歳空港" />
+            </label>
             <div className="field-row route-to">
               <label className="field">
-                <span className="label">到着地</span>
-                <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="例：新千歳空港" />
+                <span className="label">到着日</span>
+                <select value={arrivalOffset} onChange={(e) => setArrivalOffset(Number(e.target.value))} aria-label="到着日">
+                  {[-1, 0, 1, 2].map((n) => (
+                    <option key={n} value={n}>
+                      {['前日', '当日', '翌日', '2日後'][n + 1]} {formatMd(addDays(date, n))}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <label className="field">
+              <div className="field">
                 <span className="label">到着時刻</span>
-                <input type="time" value={arrivalTime} onChange={(e) => setArrivalTime(e.target.value)} />
-              </label>
+                <input type="time" value={arrivalTime} onChange={(e) => setArrivalTime(e.target.value)} aria-label="到着時刻" />
+              </div>
             </div>
+            {tzDiff && <ZoneToggle value={arrivalIn} onChange={setArrivalIn} label="到着時刻" />}
+            {tzDiff && arrivalTime && (
+              <OtherZone text={otherZoneTime(trip, addDays(date, arrivalOffset), arrivalTime, arrivalIn)} />
+            )}
+            {(() => {
+              // 到着が出発より前になっていたら知らせる（日付や時差の入れ間違いに気づけるように）
+              if (undecided || !time || !arrivalTime) return null;
+              const dep = wallToMs(date, time, zoneOf(trip, tzDiff ? timeIn : 'local'));
+              const arr = wallToMs(addDays(date, arrivalOffset), arrivalTime, zoneOf(trip, tzDiff ? arrivalIn : 'local'));
+              if (arr >= dep) {
+                const mins = Math.round((arr - dep) / 60000);
+                return <span className="hint">所要 {Math.floor(mins / 60)}時間{mins % 60 ? `${mins % 60}分` : ''}</span>;
+              }
+              return <span className="hint over">到着が出発より前になっています。到着日や時差を確認してください</span>;
+            })()}
           </div>
         )}
 
@@ -267,5 +310,27 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
         )}
       </form>
     </Sheet>
+  );
+}
+
+/** 時刻が現地時間か日本時間かの切り替え */
+function ZoneToggle({ value, onChange, label }: { value: ZoneSide; onChange: (v: ZoneSide) => void; label: string }) {
+  return (
+    <div className="seg seg-small zone-toggle" role="radiogroup" aria-label={`${label}の時間帯`}>
+      {(['local', 'japan'] as const).map((z) => (
+        <button key={z} type="button" role="radio" aria-checked={value === z} className={value === z ? 'active' : ''} onClick={() => onChange(z)}>
+          {z === 'local' ? '現地時間' : '日本時間'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function OtherZone({ text }: { text: { label: string; time: string; shift: string } }) {
+  return (
+    <span className="hint">
+      ＝ {text.label}時間 {text.time}
+      {text.shift && `（${text.shift}）`}
+    </span>
   );
 }

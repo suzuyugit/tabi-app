@@ -12,6 +12,7 @@ export type Trip = {
   cashOnHand?: number; // 出発時の自分の手持ち現金（現地通貨の最小単位）
   currency?: string; // 現地通貨（ISO コード。未設定なら円）
   rate?: number; // 1現地通貨 = rate 円（海外のときだけ）
+  timeZone?: string; // 現地の時間帯（IANA 名。例：Pacific/Honolulu）。未設定なら日本時間
   createdAt: string;
 };
 
@@ -26,6 +27,7 @@ export type ItineraryItem = {
   tripId: string;
   date: string; // YYYY-MM-DD
   time?: string; // HH:mm（移動なら出発時刻）
+  timeIn?: 'local' | 'japan'; // time が現地時間か日本時間か（時差のある旅行だけ。未設定なら現地）
   title: string;
   kind: ItemKind;
   places: string[]; // 場所（複数可）
@@ -34,6 +36,8 @@ export type ItineraryItem = {
   from?: string; // 出発地
   to?: string; // 到着地
   arrivalTime?: string; // HH:mm
+  arrivalDate?: string; // 到着日（YYYY-MM-DD）。未設定なら date と同じ日
+  arrivalIn?: 'local' | 'japan'; // arrivalTime が現地時間か日本時間か
   memo?: string;
   estimatedCost?: number; // 現地通貨の最小単位
   reservationNo?: string;

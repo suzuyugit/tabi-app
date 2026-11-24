@@ -58,4 +58,22 @@ describe('itineraryRepo', () => {
     expect(e).toBeDefined();
     expect(e!.itemId).toBeUndefined();
   });
+
+  it('時差：日本時間の予定も現地時間に直して並べる', async () => {
+    await db.trips.add({ id: T, name: 'ハワイ', startDate: '2026-12-01', endDate: '2026-12-03', budget: 0, members: [], createdAt: '', timeZone: 'Pacific/Honolulu' });
+    // 日付は「その時刻の時間帯での日付」。日本 12/1 20:00 = 現地 12/1 01:00
+    await createItem(T, { kind: 'other', places: [], date: '2026-12-01', time: '00:30', timeIn: 'local', title: '現地0時半' });
+    await createItem(T, { kind: 'other', places: [], date: '2026-12-01', time: '02:00', timeIn: 'local', title: '現地2時' });
+    await createItem(T, { kind: 'move', places: [], date: '2026-12-01', time: '20:00', timeIn: 'japan', title: '日本20時発' });
+    expect(await titles('2026-12-01')).toEqual(['現地0時半', '日本20時発', '現地2時']);
+  });
+
+  it('日をまたぐ移動を複製すると、到着日も同じだけずれる', async () => {
+    const id = await createItem(T, {
+      kind: 'move', places: [], date: '2026-12-01', time: '22:00', title: '夜行バス', transport: 'bus', arrivalDate: '2026-12-02', arrivalTime: '06:00',
+    });
+    await duplicateItem(id, ['2026-12-05']);
+    const copy = (await db.itineraryItems.where('[tripId+date]').equals([T, '2026-12-05']).toArray())[0];
+    expect(copy.arrivalDate).toBe('2026-12-06');
+  });
 });

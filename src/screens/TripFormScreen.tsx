@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { Member } from '../db/types';
 import { createTrip, CurrencyInUseError, deleteTrip, lastMyName, MemberInUseError, membersInUse, updateTrip } from '../db/tripRepo';
+import { diffLabel, JST, TIME_ZONES } from '../lib/timezone';
 import { CURRENCIES, currencyInfo, formatMoney, JPY, parseMoneyInput, parseRate, toInputValue } from '../lib/currency';
 import { newId } from '../lib/id';
 import { formatRange, todayYmd } from '../lib/date';
@@ -23,6 +24,7 @@ export function TripFormScreen({ tripId }: Props) {
   const [currency, setCurrency] = useState(JPY);
   const [rate, setRate] = useState('');
   const [savedCurrency, setSavedCurrency] = useState(JPY);
+  const [timeZone, setTimeZone] = useState(JST);
   const [members, setMembers] = useState<Member[]>([{ id: newId(), name: '自分', isMe: true }]);
   const [copyFrom, setCopyFrom] = useState('');
   const [inUse, setInUse] = useState<Set<string>>(new Set());
@@ -50,6 +52,7 @@ export function TripFormScreen({ tripId }: Props) {
         setCurrency(t.currency ?? JPY);
         setSavedCurrency(t.currency ?? JPY);
         setRate(t.rate !== undefined ? String(t.rate) : '');
+        setTimeZone(t.timeZone ?? JST);
         setMembers(t.members);
         setInUse(await membersInUse(t.id));
         if (!cancelled) setLoaded(true);
@@ -126,6 +129,7 @@ export function TripFormScreen({ tripId }: Props) {
       cashOnHand: cashNum,
       currency: currency === JPY ? undefined : currency,
       rate: rateNum,
+      timeZone: timeZone === JST ? undefined : timeZone,
     };
     const errs = validateTrip(input);
     setErrors(errs);
@@ -274,6 +278,23 @@ export function TripFormScreen({ tripId }: Props) {
             <span className="hint">予定の予想費用と手持ち現金は、新しい通貨の金額として扱われます。</span>
           )}
         </fieldset>
+
+        <label className="field">
+          <span className="label">現地の時間帯（時差）</span>
+          <select value={timeZone} onChange={(e) => setTimeZone(e.target.value)} aria-label="現地の時間帯">
+            <option value={JST}>日本時間（国内旅行）</option>
+            {TIME_ZONES.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.label}
+              </option>
+            ))}
+          </select>
+          {timeZone !== JST && startDate && (
+            <span className="hint">
+              {diffLabel(timeZone, startDate)}。予定の時刻は「現地時間」か「日本時間」かを選べ、支出の日時は現地時間で記録します
+            </span>
+          )}
+        </label>
 
         <label className="field">
           <span className="label">
