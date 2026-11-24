@@ -2154,3 +2154,9 @@ textarea {
 .settle-round {
   margin-top: 8px;
 }
+
+.custom-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -9,7 +9,7 @@ import { hasTimeDiff, nowWall } from '../lib/timezone';
 import { formatMd } from '../lib/date';
 import { convert, currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
 import { expenseCurrency } from '../lib/money';
-import { PAYMENT_LABEL, PAYMENT_METHODS, ROUND_MODE_LABEL, roundUnitsFor, sharesOf, validateExpense } from '../lib/split';
+import { PAYMENT_LABEL, PAYMENT_METHODS, ROUND_MODE_LABEL, roundTo, roundUnitsFor, sharesOf, validateExpense } from '../lib/split';
 import { Sheet } from './Sheet';
 import { IconNameSheet } from './IconNameSheet';
 import { useCategories } from '../hooks/useKinds';
@@ -83,7 +83,15 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
   /** 均等に割った額を個別の欄に入れる（金額を指定に切り替えたとき） */
   const fillEqual = () => {
     if (!amountOk || !amountNum) return setCustom({});
-    const shares = sharesOf({ amount: amountNum, paidBy, splitAmong, splitMode: 'equal' });
+    // 端数の単位を選んでいれば、ざっくりで均等に入れる
+    const shares = sharesOf({
+      amount: amountNum,
+      paidBy,
+      splitAmong,
+      splitMode: 'equal',
+      roundUnit: roundOn ? roundUnit : undefined,
+      roundMode,
+    });
     setCustom(Object.fromEntries(splitAmong.map((id) => [id, toInputValue(shares[id] ?? 0, currency)])));
   };
 
@@ -120,7 +128,61 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
 
   const roundUnits = roundUnitsFor(currency);
   // 通貨を変えたなどで単位が候補にないときは「そのまま」
-  const useRound = shared && splitMode === 'equal' && roundUnits.some((u) => u.unit === roundUnit);
+  const roundOn = roundUnits.some((u) => u.unit === roundUnit);
+  const useRound = shared && splitMode === 'equal' && roundOn;
+
+  /** 金額を指定：今の額のうち、払った人以外をその単位に丸め、ずれは払った人の欄で合わせる */
+  const roundCustom = () => {
+    if (!roundOn || !amountOk || !amountNum || !splitAmong.includes(paidBy)) return;
+    const next: Record<string, string> = {};
+    let others = 0;
+    for (const id of splitAmong) {
+      if (id === paidBy) continue;
+      const v = parseMoneyInput(custom[id] ?? '', currency);
+      const r = v === undefined || Number.isNaN(v) ? 0 : roundTo(v, roundUnit, roundMode);
+      next[id] = toInputValue(r, currency);
+      others += r;
+    }
+    if (amountNum - others < 0) return setError('丸めると払った人の負担がマイナスになります');
+    next[paidBy] = toInputValue(amountNum - others, currency);
+    setCustom(next);
+    setError('');
+  };
+
+  // 端数（ざっくり）の選択。均等でも金額を指定でも使う
+  const roundControls = (
+    <div className="round-row">
+      <span className="muted small">端数</span>
+      <select
+        value={roundOn ? roundUnit : 0}
+        onChange={(e) => setRoundUnit(Number(e.target.value))}
+        aria-label="端数"
+      >
+        <option value={0}>そのまま</option>
+        {roundUnits.map((u) => (
+          <option key={u.unit} value={u.unit}>
+            {u.label}単位
+          </option>
+        ))}
+      </select>
+      {roundOn && (
+        <div className="seg seg-small" role="radiogroup" aria-label="丸め方">
+          {(['up', 'nearest', 'down'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={roundMode === m}
+              className={roundMode === m ? 'active' : ''}
+              onClick={() => setRoundMode(m)}
+            >
+              {ROUND_MODE_LABEL[m]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const equalPreview = (() => {
     if (!amountOk || !amountNum || splitAmong.length === 0) return '';
@@ -307,37 +369,7 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
               </div>
               {splitMode === 'equal' ? (
                 <>
-                  <div className="round-row">
-                    <span className="muted small">端数</span>
-                    <select
-                      value={useRound ? roundUnit : 0}
-                      onChange={(e) => setRoundUnit(Number(e.target.value))}
-                      aria-label="端数"
-                    >
-                      <option value={0}>そのまま</option>
-                      {roundUnits.map((u) => (
-                        <option key={u.unit} value={u.unit}>
-                          {u.label}単位
-                        </option>
-                      ))}
-                    </select>
-                    {useRound && (
-                      <div className="seg seg-small" role="radiogroup" aria-label="丸め方">
-                        {(['up', 'nearest', 'down'] as const).map((m) => (
-                          <button
-                            key={m}
-                            type="button"
-                            role="radio"
-                            aria-checked={roundMode === m}
-                            className={roundMode === m ? 'active' : ''}
-                            onClick={() => setRoundMode(m)}
-                          >
-                            {ROUND_MODE_LABEL[m]}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {roundControls}
                   {equalPreview && <span className="hint">{equalPreview}</span>}
                 </>
               ) : (
@@ -357,9 +389,23 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
                   <div className={`hint ${amountOk && customSum !== amountNum ? 'over' : ''}`}>
                     合計 {fmt(customSum)} / {fmt(amountOk ? amountNum : 0)}
                     {amountOk && customSum !== amountNum ? `（あと ${fmt(amountNum - customSum)}）` : ''}
-                    <button type="button" className="btn-text" onClick={fillEqual}>
-                      均等に入れ直す
+                  </div>
+                  {roundControls}
+                  <div className="custom-actions">
+                    <button type="button" className="btn btn-ghost btn-small" onClick={fillEqual}>
+                      均等に入れ直す{roundOn ? '（ざっくり）' : ''}
                     </button>
+                    {roundOn && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-small"
+                        onClick={roundCustom}
+                        disabled={!splitAmong.includes(paidBy)}
+                        title={splitAmong.includes(paidBy) ? '' : '払った人が割る人に入っていないとそろえられません'}
+                      >
+                        端数をそろえる
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
