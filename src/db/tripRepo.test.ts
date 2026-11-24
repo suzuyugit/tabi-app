@@ -71,7 +71,7 @@ describe('DB', () => {
     const other = await createTrip({ ...input(), name: '別の旅行' });
     await db.packingItems.add({ id: 'p1', tripId: id, name: '傘', checked: false, order: 0 });
     await db.packingItems.add({ id: 'p2', tripId: other, name: '傘', checked: false, order: 0 });
-    await db.itineraryItems.add({ id: 'i1', tripId: id, date: '2026-12-01', title: '清水寺', order: 0 });
+    await db.itineraryItems.add({ id: 'i1', tripId: id, date: '2026-12-01', title: '清水寺', kind: 'sightseeing', places: [], order: 0 });
     await db.settlements.add({ tripId: id, from: 'sato', to: 'suzuki', amount: 100, done: true });
 
     await deleteTrip(id);

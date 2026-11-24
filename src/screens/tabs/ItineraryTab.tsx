@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { ItineraryItem, Trip } from '../../db/types';
 import { deleteItem, reorderItems } from '../../db/itineraryRepo';
-import { byOrder, mapsUrl, tripDays } from '../../lib/itinerary';
+import { byOrder, itemIcon, kindMeta, mapsUrl, routeUrl, tripDays } from '../../lib/itinerary';
 import { formatMd, formatYen, todayYmd } from '../../lib/date';
 import { copyText } from '../../lib/clipboard';
 import { useLongPressReorder } from '../../hooks/useLongPressReorder';
@@ -154,10 +154,16 @@ function ItemCardBody({ item, actual, showDate, onMenu }: CardProps) {
       <div className="item-time">
         {showDate && <span className="item-date">{formatMd(item.date)}</span>}
         {item.time ?? '--:--'}
+        {item.kind === 'move' && item.arrivalTime && <span className="item-arrive">〜{item.arrivalTime}</span>}
       </div>
       <div className="item-main">
         <div className="item-title-row">
-          <span className="item-title">{item.title}</span>
+          <span className="item-title">
+            <span className="item-kind" title={kindMeta(item.kind).label}>
+              {itemIcon(item)}
+            </span>
+            {item.title}
+          </span>
           <button
             type="button"
             className="icon-btn item-menu"
@@ -171,11 +177,31 @@ function ItemCardBody({ item, actual, showDate, onMenu }: CardProps) {
             ⋯
           </button>
         </div>
-        {item.place && (
-          <a className="item-place" href={mapsUrl(item.place)} target="_blank" rel="noopener noreferrer" onClick={stop}>
-            📍 {item.place}
-          </a>
+        {item.kind === 'move' && (item.from || item.to) && (
+          <div className="item-route">
+            <span className="route-text">
+              {item.from && <PlaceLink place={item.from} />}
+              <span className="route-sep">→</span>
+              {item.to && <PlaceLink place={item.to} />}
+            </span>
+            {item.from && item.to && (
+              <a
+                className="chip chip-btn"
+                href={routeUrl(item.from, item.to, item.transport)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={stop}
+              >
+                経路 ↗
+              </a>
+            )}
+          </div>
         )}
+        {item.places?.map((pl, i) => (
+          <a key={i} className="item-place" href={mapsUrl(pl)} target="_blank" rel="noopener noreferrer" onClick={stop}>
+            📍 {pl}
+          </a>
+        ))}
         {(item.checkInTime || item.reservationNo || item.url) && (
           <div className="item-reserve">
             {item.checkInTime && <span className="chip">IN {item.checkInTime}</span>}
@@ -209,5 +235,13 @@ function ItemCardBody({ item, actual, showDate, onMenu }: CardProps) {
         {item.memo && <div className="item-memo">{item.memo}</div>}
       </div>
     </>
+  );
+}
+
+function PlaceLink({ place }: { place: string }) {
+  return (
+    <a className="route-place" href={mapsUrl(place)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+      {place}
+    </a>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { insertIndex, moveItem, nearestItem, normalizeUrl, tripDays } from './itinerary';
+import { fallbackTitle, insertIndex, itemIcon, moveItem, nearestItem, normalizeUrl, routeUrl, tripDays } from './itinerary';
 
 describe('itinerary', () => {
   it('tripDays：月をまたぐ', () => {
@@ -39,5 +39,16 @@ describe('itinerary', () => {
     expect(normalizeUrl('example.com/a')).toBe('https://example.com/a');
     expect(normalizeUrl('http://x.jp')).toBe('http://x.jp');
     expect(normalizeUrl('  ')).toBeUndefined();
+  });
+
+  it('移動：アイコン・代わりのタイトル・経路 URL', () => {
+    expect(itemIcon({ kind: 'move', transport: 'plane' })).toBe('✈️');
+    expect(itemIcon({ kind: 'food' })).toBe('🍽️');
+    expect(fallbackTitle({ kind: 'move', transport: 'taxi' })).toBe('タクシー');
+    const u = new URL(routeUrl('羽田空港', '新千歳空港', 'taxi'));
+    expect(u.searchParams.get('origin')).toBe('羽田空港');
+    expect(u.searchParams.get('destination')).toBe('新千歳空港');
+    expect(u.searchParams.get('travelmode')).toBe('driving');
+    expect(new URL(routeUrl('a', 'b', 'plane')).searchParams.get('travelmode')).toBe('transit');
   });
 });

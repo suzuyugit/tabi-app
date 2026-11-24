@@ -32,6 +32,21 @@ export class TabiDB extends Dexie {
       settlements: '[tripId+from+to], tripId',
     });
 
+    // v2：予定に種類（kind）を追加し、場所を1つ（place）から複数（places）にした
+    this.version(2)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('itineraryItems')
+          .toCollection()
+          .modify((it: Record<string, unknown>) => {
+            const place = typeof it.place === 'string' ? it.place.trim() : '';
+            it.places = place ? [place] : [];
+            delete it.place;
+            if (!it.kind) it.kind = 'other';
+          }),
+      );
+
     // 初回作成時だけカテゴリの初期値を入れる
     this.on('populate', (tx) => {
       tx.table('categories').bulkAdd(DEFAULT_CATEGORIES.map((c) => ({ ...c, usageCount: 0 })));

@@ -1170,3 +1170,100 @@ textarea {
   font-weight: 600;
   color: var(--muted);
 }
+
+/* --- 予定の種類・移動 --- */
+.kind-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.kind-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kind-btn.active {
+  border: 2px solid var(--primary);
+  background: var(--primary-weak);
+  color: var(--primary);
+}
+
+.kind-icon {
+  font-size: 18px;
+}
+
+.route-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--primary-weak);
+}
+
+.route-to {
+  grid-template-columns: 1fr 140px;
+}
+
+.route-arrow {
+  text-align: center;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.place-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.field > .btn-small {
+  align-self: flex-start;
+}
+
+.item-kind {
+  margin-right: 6px;
+}
+
+.item-arrive {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.item-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 14px;
+}
+
+.route-text {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.route-place {
+  color: var(--upcoming);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.route-sep {
+  color: var(--muted);
+}

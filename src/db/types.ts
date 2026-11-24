@@ -13,13 +13,25 @@ export type Trip = {
   createdAt: string;
 };
 
+/** 予定の種類 */
+export type ItemKind = 'move' | 'food' | 'sightseeing' | 'stay' | 'shopping' | 'other';
+
+/** 移動の手段 */
+export type Transport = 'plane' | 'shinkansen' | 'train' | 'bus' | 'taxi' | 'car' | 'walk' | 'ship' | 'other';
+
 export type ItineraryItem = {
   id: string;
   tripId: string;
   date: string; // YYYY-MM-DD
-  time?: string; // HH:mm
+  time?: string; // HH:mm（移動なら出発時刻）
   title: string;
-  place?: string;
+  kind: ItemKind;
+  places: string[]; // 場所（複数可）
+  // 移動のときだけ使う
+  transport?: Transport;
+  from?: string; // 出発地
+  to?: string; // 到着地
+  arrivalTime?: string; // HH:mm
   memo?: string;
   estimatedCost?: number;
   reservationNo?: string;

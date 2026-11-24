@@ -44,13 +44,21 @@ type Trip = {
   createdAt: string;
 };
 
+type ItemKind = 'move' | 'food' | 'sightseeing' | 'stay' | 'shopping' | 'other'; // 移動・食事・観光・宿泊・買い物・その他
+type Transport = 'plane' | 'shinkansen' | 'train' | 'bus' | 'taxi' | 'car' | 'walk' | 'ship' | 'other';
+
 type ItineraryItem = {
   id: string;
   tripId: string;
   date: string;           // YYYY-MM-DD
-  time?: string;          // HH:mm
-  title: string;
-  place?: string;
+  time?: string;          // HH:mm（移動なら出発時刻）
+  title: string;          // 移動で空なら手段の名前（「飛行機」など）
+  kind: ItemKind;         // 予定の種類
+  places: string[];       // 場所（複数可）
+  transport?: Transport;  // 以下は移動のときだけ
+  from?: string;          // 出発地
+  to?: string;            // 到着地
+  arrivalTime?: string;   // HH:mm
   memo?: string;
   estimatedCost?: number; // 予想費用
   reservationNo?: string; // 予約番号
@@ -104,7 +112,9 @@ type Settlement = { tripId: string; from: string; to: string; amount: number; do
 - 上に日付のタブ（1日目・2日目…）、下に時刻順の予定カード。旅行中は今日のタブを最初に開く
 - カードには時刻・タイトル・場所・予想費用を表示。ひも付いた支出があれば、実際に使った額も並べて出す
 - カードの長押しで並び替え、タップで編集
-- 場所をタップすると Google マップで検索できるリンクにする
+- 場所をタップすると Google マップで検索できるリンクにする（場所は複数持てる）
+- 予定には種類（移動・食事・観光・宿泊・買い物・その他）を付け、カードにアイコンで出す
+- 移動は手段（飛行機・新幹線・電車・バス・タクシー・車・徒歩・船・その他）、出発地 → 到着地、到着時刻を持つ。カードに Google マップの経路リンクを出す
 
 ### お金タブ
 
