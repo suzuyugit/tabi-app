@@ -207,22 +207,20 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
 
         {isStay && (
           <div className="route-fields">
-            <div className="field-row">
-              <label className="field">
-                <span className="label">泊数</span>
-                <select value={nights} onChange={(e) => setNights(Number(e.target.value))} aria-label="泊数">
-                  {Array.from({ length: 14 }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {n}泊
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span className="label">チェックアウト</span>
-                <input type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} aria-label="チェックアウト" />
-              </label>
-            </div>
+            <label className="field">
+              <span className="label">泊数</span>
+              <select value={nights} onChange={(e) => setNights(Number(e.target.value))} aria-label="泊数">
+                {Array.from({ length: 14 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n}泊（{formatMd(addDays(date, n))}まで）
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="label">チェックアウト</span>
+              <input type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} aria-label="チェックアウト" />
+            </label>
             <span className="hint">
               {formatMd(date)} チェックイン → {formatMd(addDays(date, nights))} チェックアウト
               {tzDiff ? '（現地時間）' : ''}
