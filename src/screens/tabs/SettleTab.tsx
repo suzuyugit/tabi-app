@@ -35,7 +35,7 @@ export function SettleTab({ trip }: Props) {
   if (!data) return null;
 
   // ざっくり精算：精算表の額をきりのいい額に四捨五入。0 になる受け渡しは「端数なので精算なし」
-  const roundUnits = roundUnitsFor(target).slice(1);
+  const roundUnits = roundUnitsFor(target); // 円なら 10円・100円・1000円単位
   const settleRound = roundUnits.some((u) => u.unit === trip.settleRound) ? trip.settleRound! : 0;
   const rounded = data.transfers.map((t) => ({ ...t, exact: t.amount, amount: settleRound ? roundTo(t.amount, settleRound, 'nearest') : t.amount }));
   const transfers = rounded.filter((t) => t.amount > 0);
