@@ -13,12 +13,24 @@ type Props = {
 /** 下から出てくるシート */
 export function Sheet({ title, onClose, action, tall, children }: Props) {
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // 後ろのページを今の位置で止める。iPhone は overflow: hidden だけだとキーボードの開け閉めで
+    // ページが動き、タップの位置が見た目とずれることがあるので、body を固定して閉じるときに元の位置へ戻す
+    const body = document.body;
+    const y = window.scrollY;
+    const prev = { position: body.style.position, top: body.style.top, left: body.style.left, right: body.style.right, overflow: body.style.overflow };
+    const alreadyLocked = prev.position === 'fixed'; // シートの上にシートを開いたとき
+    if (!alreadyLocked) {
+      body.style.position = 'fixed';
+      body.style.top = `-${y}px`;
+      body.style.left = '0';
+      body.style.right = '0';
+    }
+    body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => {
-      document.body.style.overflow = prev;
+      Object.assign(body.style, prev);
+      if (!alreadyLocked) window.scrollTo(0, y);
       window.removeEventListener('keydown', onKey);
     };
   }, [onClose]);

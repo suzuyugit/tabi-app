@@ -75,7 +75,8 @@ export function TripScreen({ tripId, tab }: Props) {
         className="fab"
         aria-label="支出を記録"
         onClick={() => {
-          keyboardProxy.current?.focus();
+          // ページを動かさずにフォーカスする（iPhone で画面がずれないように）
+          keyboardProxy.current?.focus({ preventScroll: true });
           setExpenseSheet({});
         }}
       >
