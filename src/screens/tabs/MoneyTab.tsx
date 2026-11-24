@@ -97,6 +97,20 @@ export function MoneyTab({ trip, onEdit }: Props) {
   ].map((d) => ({ ...d, value: summary.byDay.get(d.date) ?? 0, planned: fc.plannedByDay.get(d.date) ?? 0 }));
   const dayMax = Math.max(1, ...dayRows.map((r) => r.value + r.planned));
 
+  // ○日目までの累計（日付順に足していく）。使った額とこれからの予定を分けて持つ
+  let runSpent = 0;
+  let runPlanned = 0;
+  const cumRows = [...dayRows]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((r) => {
+      runSpent += r.value;
+      runPlanned += r.planned;
+      return { ...r, cumSpent: runSpent, cumPlanned: runPlanned, cum: runSpent + runPlanned };
+    });
+  const cumScale = Math.max(1, budget, ...cumRows.map((r) => r.cum));
+  // 予算を初めて超える日
+  const firstOver = budget > 0 ? cumRows.find((r) => r.cum > budget) : undefined;
+
   const filtered = data.expenses.filter(
     (e) => (!dayFilter || isoDate(e.datetime, trip.timeZone) === dayFilter) && (!catFilter || e.categoryId === catFilter),
   );
@@ -279,6 +293,60 @@ export function MoneyTab({ trip, onEdit }: Props) {
           ))}
         </ul>
       </section>
+
+      {cumRows.length > 1 && (
+        <section className="card">
+          <h3 className="card-title">その日までの累計{fc.planned > 0 ? '（見積もり）' : ''}</h3>
+          {budget > 0 && (
+            <p className={`small ${firstOver ? 'over' : 'muted'}`}>
+              {firstOver
+                ? `⚠ ${firstOver.sub}（${firstOver.label}）に予算 ${fmt(budget)} を超える見込みです`
+                : `最終日まで予算 ${fmt(budget)} の中に収まる見込みです`}
+            </p>
+          )}
+          <ul className="hbars cum-bars">
+            {cumRows.map((r) => {
+              const over = budget > 0 && r.cum > budget;
+              return (
+                <li key={r.date} className="hbar-row" title={`${r.label}まで ${fmt(r.cum)}`}>
+                  <span className="hbar-label">{r.sub}まで</span>
+                  <span className="hbar-track cum-track">
+                    {r.cumSpent > 0 && (
+                      <span className={`hbar-fill ${over ? 'over-fill' : ''}`} style={{ width: `${(r.cumSpent / cumScale) * 100}%` }} />
+                    )}
+                    {r.cumPlanned > 0 && (
+                      <span className="hbar-fill planned" style={{ width: `${(r.cumPlanned / cumScale) * 100}%` }} />
+                    )}
+                    {budget > 0 && <span className="cum-budget" style={{ left: `${(budget / cumScale) * 100}%` }} />}
+                  </span>
+                  <span className={`hbar-value ${over ? 'over' : ''}`}>
+                    {fmt(r.cum)}
+                    <PlannedNote value={r.cumSpent} planned={r.cumPlanned} fmt={fmt} />
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          {budget > 0 && (
+            <ul className="legend">
+              <li>
+                <span className="swatch" />
+                使った額
+              </li>
+              {fc.planned > 0 && (
+                <li>
+                  <span className="swatch planned" />
+                  これからの予定
+                </li>
+              )}
+              <li>
+                <span className="swatch-line" />
+                予算
+              </li>
+            </ul>
+          )}
+        </section>
+      )}
 
       <section>
         <h3 className="section-title">支出の一覧</h3>

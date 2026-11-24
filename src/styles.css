@@ -1649,3 +1649,31 @@ textarea {
   border-style: solid;
   transform: translateX(-50%) scale(1.04);
 }
+
+/* --- ○日目までの累計 --- */
+.cum-track {
+  position: relative;
+}
+
+.cum-budget {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+}
+
+.hbar-fill.over-fill {
+  background: var(--danger);
+}
+
+.swatch-line {
+  width: 2px;
+  height: 12px;
+  background: var(--text);
+}
+
+.cum-bars {
+  margin-top: 4px;
+}
