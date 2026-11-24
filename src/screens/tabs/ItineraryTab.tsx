@@ -160,7 +160,16 @@ export function ItineraryTab({ trip }: Props) {
       </button>
 
       {editing && (
-        <ItemSheet trip={trip} item={editing.item} defaultDate={defaultDate} onClose={() => setEditing(null)} />
+        <ItemSheet
+          trip={trip}
+          item={editing.item}
+          defaultDate={defaultDate}
+          onClose={() => setEditing(null)}
+          onDuplicate={(saved) => {
+            setEditing(null);
+            setDuplicating(saved);
+          }}
+        />
       )}
       {duplicating && <DuplicateSheet trip={trip} item={duplicating} onClose={() => setDuplicating(null)} />}
       {menuFor && (

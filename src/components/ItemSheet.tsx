@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ItemKind, ItineraryItem, Transport, Trip } from '../db/types';
 import { createItem, deleteItem, updateItem, type ItemInput } from '../db/itineraryRepo';
+import { db } from '../db/db';
 import { addDays, daysBetween, fallbackTitle, ITEM_KINDS, normalizeUrl, TRANSPORTS, tripDays } from '../lib/itinerary';
 import { hasTimeDiff, otherZoneTime, wallToMs, zoneOf, type ZoneSide } from '../lib/timezone';
 import { formatMd } from '../lib/date';
@@ -9,7 +10,14 @@ import { MoneyField } from './MoneyField';
 import { Sheet } from './Sheet';
 import { showToast } from './Toast';
 
-type Props = { trip: Trip; item?: ItineraryItem; defaultDate: string; onClose: () => void };
+type Props = {
+  trip: Trip;
+  item?: ItineraryItem;
+  defaultDate: string;
+  onClose: () => void;
+  /** 保存したあと「別の日に複製」を開く */
+  onDuplicate?: (item: ItineraryItem) => void;
+};
 
 const opt = (s: string) => (s.trim() ? s.trim() : undefined);
 
@@ -23,7 +31,7 @@ const TITLE_PLACEHOLDER: Record<ItemKind, string> = {
 };
 
 /** 予定の追加・編集 */
-export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
+export function ItemSheet({ trip, item, defaultDate, onClose, onDuplicate }: Props) {
   const [kind, setKind] = useState<ItemKind>(item?.kind ?? 'other');
   const [transport, setTransport] = useState<Transport>(item?.transport ?? 'train');
   const [date, setDate] = useState(item?.date ?? defaultDate);
@@ -68,7 +76,8 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   const addPlace = () => setPlaces((ps) => [...ps, '']);
   const removePlace = (i: number) => setPlaces((ps) => (ps.length === 1 ? [''] : ps.filter((_, j) => j !== i)));
 
-  const save = async () => {
+  /** then = 'duplicate' なら、保存してから複製の画面を開く */
+  const save = async (then: 'close' | 'duplicate' = 'close') => {
     const costNum = parseMoneyInput(cost, costCurrency);
     const move = isMove
       ? {
@@ -101,8 +110,13 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
       checkOutTime: isStay ? opt(checkOutTime) : undefined,
       url: normalizeUrl(url),
     };
-    if (item) await updateItem(item.id, input);
-    else await createItem(trip.id, input);
+    let id = item?.id;
+    if (id) await updateItem(id, input);
+    else id = await createItem(trip.id, input);
+    if (then === 'duplicate' && onDuplicate) {
+      const saved = await db.itineraryItems.get(id);
+      if (saved) return onDuplicate(saved);
+    }
     showToast(item ? '予定を保存しました' : '予定を追加しました');
     onClose();
   };
@@ -119,7 +133,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
       title={item ? '予定を編集' : '予定を追加'}
       onClose={onClose}
       action={
-        <button type="button" className="btn btn-primary btn-small" onClick={save}>
+        <button type="button" className="btn btn-primary btn-small" onClick={() => save()}>
           保存
         </button>
       }
@@ -344,6 +358,12 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
         ) : (
           <button type="button" className="btn btn-ghost" onClick={() => setShowMore(true)}>
             ＋予約情報・メモ
+          </button>
+        )}
+
+        {onDuplicate && (
+          <button type="button" className="btn btn-ghost btn-block" onClick={() => save('duplicate')}>
+            {item ? '保存して別の日に複製' : '追加して別の日にも複製'}
           </button>
         )}
 
