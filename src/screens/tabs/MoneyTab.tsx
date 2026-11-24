@@ -8,6 +8,9 @@ import { isoDate, isoTime } from '../../lib/datetime';
 import { formatMd } from '../../lib/date';
 import { tripDays } from '../../lib/itinerary';
 import { PAYMENT_LABEL } from '../../lib/split';
+import { deleteExpense } from '../../db/expenseRepo';
+import { SwipeToDelete } from '../../components/SwipeToDelete';
+import { showToast } from '../../components/Toast';
 
 const CUR_KEY = 'tabi.moneyCurrency';
 
@@ -349,7 +352,10 @@ export function MoneyTab({ trip, onEdit }: Props) {
       )}
 
       <section>
-        <h3 className="section-title">支出の一覧</h3>
+        <div className="settle-head">
+          <h3 className="section-title">支出の一覧</h3>
+          <span className="muted small">タップで編集・左にスライドで削除</span>
+        </div>
         <div className="filters">
           <select value={dayFilter} onChange={(e) => setDayFilter(e.target.value)} aria-label="日付で絞り込み">
             <option value="">すべての日</option>
@@ -383,6 +389,15 @@ export function MoneyTab({ trip, onEdit }: Props) {
               const cur = expenseCurrency(e);
               return (
                 <li key={e.id}>
+                  <SwipeToDelete
+                    onDelete={async () => {
+                      const label = `${e.memo || cat?.name || '支出'} ${formatMoney(e.amount, cur)}`;
+                      if (!confirm(`「${label}」を本当に削除しますか？`)) return false;
+                      await deleteExpense(e.id);
+                      showToast('支出を削除しました');
+                      return true;
+                    }}
+                  >
                   <button className="expense-row" onClick={() => onEdit(e)}>
                     <span className="expense-icon">{cat?.icon ?? '❔'}</span>
                     <span className="expense-main">
@@ -405,6 +420,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
                       <span className="expense-mine">自分 {fmt(valueIn(e, 'me', meId, display, trip))}</span>
                     </span>
                   </button>
+                  </SwipeToDelete>
                 </li>
               );
             })}
