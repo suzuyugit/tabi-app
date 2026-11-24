@@ -4,11 +4,14 @@ import { TripListScreen } from './screens/TripListScreen';
 import { TripFormScreen } from './screens/TripFormScreen';
 import { TripScreen } from './screens/TripScreen';
 import { ToastHost } from './components/Toast';
+import { SettingsScreen } from './screens/SettingsScreen';
 
 function renderRoute(route: Route) {
   switch (route.name) {
     case 'list':
       return <TripListScreen />;
+    case 'settings':
+      return <SettingsScreen />;
     case 'newTrip':
       return <TripFormScreen key="new" />;
     case 'editTrip':

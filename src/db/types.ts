@@ -16,8 +16,17 @@ export type Trip = {
   createdAt: string;
 };
 
-/** 予定の種類 */
-export type ItemKind = 'move' | 'food' | 'sightseeing' | 'stay' | 'shopping' | 'other';
+/** 予定の種類の ID。最初から入っている move / food / sightseeing / stay / shopping / other と、自分で足した種類 */
+export type ItemKind = string;
+
+/** 予定の種類（自分で追加・編集できる） */
+export type ItemKindDef = {
+  id: string;
+  name: string;
+  icon: string;
+  order: number;
+  categoryId: string; // 見積もりをカテゴリ別に分けるときに入れる支出のカテゴリ
+};
 
 /** 移動の手段 */
 export type Transport = 'plane' | 'shinkansen' | 'train' | 'bus' | 'taxi' | 'car' | 'walk' | 'ship' | 'other';

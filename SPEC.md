@@ -28,7 +28,7 @@ React + TypeScript + Vite で作り、IndexedDB に保存して、GitHub Pages �
 
 ## データ設計
 
-テーブルは6つ（Trip・ItineraryItem・Expense・PackingItem・Category・Repayment）。金額はすべてその通貨の最小単位の整数（円なら円、ドルならセント）、日時は ISO 文字列で持つ。
+テーブルは7つ（Trip・ItineraryItem・Expense・PackingItem・Category・ItemKind・Repayment）。金額はすべてその通貨の最小単位の整数（円なら円、ドルならセント）、日時は ISO 文字列で持つ。
 
 ```ts
 type Member = { id: string; name: string; isMe: boolean };
@@ -47,7 +47,9 @@ type Trip = {
   createdAt: string;
 };
 
-type ItemKind = 'move' | 'food' | 'sightseeing' | 'stay' | 'shopping' | 'other'; // 移動・食事・観光・宿泊・買い物・その他
+type ItemKind = string; // 予定の種類の ID。最初から move / food / sightseeing / stay / shopping / other があり、自分で足せる
+// 予定の種類（自分で追加・編集・削除できる）。categoryId は見積もりで入れる支出のカテゴリ
+type ItemKindDef = { id: string; name: string; icon: string; order: number; categoryId: string };
 type Transport = 'plane' | 'shinkansen' | 'train' | 'bus' | 'taxi' | 'car' | 'walk' | 'ship' | 'other';
 
 type ItineraryItem = {
@@ -102,7 +104,8 @@ type Category = { id: string; name: string; icon: string; usageCount: number };
 type Repayment = { id: string; tripId: string; from: string; to: string; amount: number; datetime: string; memo?: string };
 ```
 
-- カテゴリの初期値：交通、宿、食事、カフェ・おやつ、観光、お土産、その他
+- カテゴリの初期値：交通、宿、食事、カフェ・おやつ、観光、お土産、その他。自分で追加・編集・削除できる（削除すると使っていた支出は「その他」へ。「その他」は削除できない）
+- 予定の種類の初期値：移動、食事、観光、宿泊、買い物、その他。自分で追加・編集・削除できる（削除すると使っていた予定は「その他」へ。移動・宿泊は専用の入力欄があり、その他は受け皿なので削除できない）
 - 精算表の金額はその都度計算し直す。`Repayment` は実際に渡したお金の記録で、支出を変えても消えない（精算表はこの分を引いた残りを出す）。前に使っていた `Settlement`（済みチェック）はやめた
 - 割り勘しない支出（自分が払って自分だけの負担）は精算に入れない
 - メンバーを削除するとき、その人が関わる支出や渡したお金の記録があれば削除できないようにする
@@ -136,7 +139,8 @@ type Repayment = { id: string; tripId: string; from: string; to: string; amount:
 
 - 旅行のカード（名前・日程・自分の負担額／予算・見積もり）を、日付が近いものから並べる
 - 「＋新しい旅行」：名前・日程・メンバー・予算（自分の分）を入力。前の旅行から持ち物をコピーするかも選べる
-- 設定：カテゴリの編集、自分の名前、JSONでのバックアップと復元
+- 設定（右上の ⚙）：支出のカテゴリと予定の種類の追加・編集・削除（アイコンは候補から選ぶか絵文字を入れる）、自分の名前、JSONでのバックアップと復元
+- 支出のクイック入力のカテゴリ、予定の種類の一覧の最後にも「＋追加」があり、入力の途中で足せる（足したものがそのまま選ばれる）
 
 ### 旅程タブ
 
@@ -157,7 +161,7 @@ type Repayment = { id: string; tripId: string; from: string; to: string; amount:
 - 支出の一覧（新しい順）。日付やカテゴリで絞り込める。タップで編集・削除。左にスライドしても削除できる（本当に削除するか確認を出す）
 - 使った額や内訳は自分の負担分だけを出す（グループ全体の額は出さない。各自の額は精算タブで見る）
 - 旅行全体の見積もり（自分の分）＝使った額＋これからの予定の予想費用。支出がまだひも付いていない予定の予想費用だけを足す。予算と比べて「予算内の見込み／オーバーの見込み」を出し、見積もりに入っている予定の一覧も見られる
-- 予算バー・カテゴリ別・1日ごとの合計は、使った額（塗り）とこれからの予定（斜線）を積み上げて出す。カテゴリ別では予定の種類をカテゴリに当てはめる（移動→交通、宿泊→宿、食事→食事、観光→観光、買い物→お土産、その他→その他）
+- 予算バー・カテゴリ別・1日ごとの合計は、使った額（塗り）とこれからの予定（斜線）を積み上げて出す。カテゴリ別では予定の種類ごとに決めたカテゴリに当てはめる（初期値：移動→交通、宿泊→宿、食事→食事、観光→観光、買い物→お土産、その他→その他）
 
 ### 精算タブ
 

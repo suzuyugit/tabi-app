@@ -1,4 +1,5 @@
-import type { ItemKind, ItineraryItem, Transport, Trip } from '../db/types';
+import type { ItemKind, ItemKindDef, ItineraryItem, Transport, Trip } from '../db/types';
+import { DEFAULT_ITEM_KINDS, OTHER_KIND } from './kinds';
 import { formatMd, parseYmd, toYmd } from './date';
 import { hmToMinutes } from './datetime';
 import { localMinutes } from './timezone';
@@ -112,15 +113,6 @@ export function normalizeUrl(s: string): string | undefined {
   return /^https?:\/\//i.test(t) ? t : `https://${t}`;
 }
 
-export const ITEM_KINDS: { key: ItemKind; label: string; icon: string }[] = [
-  { key: 'move', label: '移動', icon: '🚃' },
-  { key: 'food', label: '食事', icon: '🍽️' },
-  { key: 'sightseeing', label: '観光', icon: '📸' },
-  { key: 'stay', label: '宿泊', icon: '🏨' },
-  { key: 'shopping', label: '買い物', icon: '🛍️' },
-  { key: 'other', label: 'その他', icon: '📌' },
-];
-
 export const TRANSPORTS: { key: Transport; label: string; icon: string }[] = [
   { key: 'plane', label: '飛行機', icon: '✈️' },
   { key: 'shinkansen', label: '新幹線', icon: '🚄' },
@@ -133,8 +125,9 @@ export const TRANSPORTS: { key: Transport; label: string; icon: string }[] = [
   { key: 'other', label: 'その他', icon: '🧭' },
 ];
 
-export function kindMeta(kind: ItemKind | undefined) {
-  return ITEM_KINDS.find((k) => k.key === kind) ?? ITEM_KINDS[ITEM_KINDS.length - 1];
+/** 種類の名前とアイコン。kinds は DB の種類の一覧（なければ最初から入っている種類） */
+export function kindMeta(kind: ItemKind | undefined, kinds: ItemKindDef[] = DEFAULT_ITEM_KINDS): ItemKindDef {
+  return kinds.find((k) => k.id === kind) ?? kinds.find((k) => k.id === OTHER_KIND) ?? DEFAULT_ITEM_KINDS[DEFAULT_ITEM_KINDS.length - 1];
 }
 
 export function transportMeta(t: Transport | undefined) {
@@ -142,8 +135,8 @@ export function transportMeta(t: Transport | undefined) {
 }
 
 /** 予定のアイコン（移動なら手段のアイコン） */
-export function itemIcon(item: Pick<ItineraryItem, 'kind' | 'transport'>): string {
-  return item.kind === 'move' ? transportMeta(item.transport).icon : kindMeta(item.kind).icon;
+export function itemIcon(item: Pick<ItineraryItem, 'kind' | 'transport'>, kinds?: ItemKindDef[]): string {
+  return item.kind === 'move' ? transportMeta(item.transport).icon : kindMeta(item.kind, kinds).icon;
 }
 
 /** Google マップの経路検索（出発地 → 到着地） */
@@ -155,7 +148,7 @@ export function routeUrl(from: string, to: string, transport?: Transport): strin
 }
 
 /** タイトルが空のときの代わりの名前（移動なら「飛行機」など） */
-export function fallbackTitle(item: Pick<ItineraryItem, 'kind' | 'transport' | 'from' | 'to'>): string {
+export function fallbackTitle(item: Pick<ItineraryItem, 'kind' | 'transport' | 'from' | 'to'>, kinds?: ItemKindDef[]): string {
   if (item.kind === 'move') return transportMeta(item.transport).label;
-  return kindMeta(item.kind).label;
+  return kindMeta(item.kind, kinds).name;
 }

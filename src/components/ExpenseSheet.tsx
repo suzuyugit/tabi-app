@@ -11,6 +11,8 @@ import { convert, currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, to
 import { expenseCurrency } from '../lib/money';
 import { PAYMENT_LABEL, PAYMENT_METHODS, sharesOf, validateExpense } from '../lib/split';
 import { Sheet } from './Sheet';
+import { IconNameSheet } from './IconNameSheet';
+import { useCategories } from '../hooks/useKinds';
 import { showToast } from './Toast';
 
 type Props = { trip: Trip; expense?: Expense; onClose: () => void };
@@ -46,10 +48,8 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
   const [error, setError] = useState('');
 
   // よく使う順（同じなら初期値の順）
-  const categories = useLiveQuery(async () => {
-    const all = await db.categories.toArray();
-    return all.sort((a, b) => b.usageCount - a.usageCount || a.id.localeCompare(b.id));
-  });
+  const categories = useCategories();
+  const [addingCat, setAddingCat] = useState(false);
   const items = useLiveQuery(
     async () =>
       (await db.itineraryItems.where('tripId').equals(trip.id).toArray()).sort(
@@ -196,7 +196,21 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
               <span className="cat-name">{c.name}</span>
             </button>
           ))}
+          <button type="button" className="cat-btn add-tile" onClick={() => setAddingCat(true)}>
+            <span className="cat-icon">＋</span>
+            <span className="cat-name">追加</span>
+          </button>
         </div>
+        {addingCat && (
+          <IconNameSheet
+            mode="category"
+            onClose={() => setAddingCat(false)}
+            onSaved={(id) => {
+              setCategoryId(id);
+              setError('');
+            }}
+          />
+        )}
 
         <div className="field">
           <span className="label">支払い方法</span>

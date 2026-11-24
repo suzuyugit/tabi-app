@@ -56,8 +56,9 @@ export function MoneyTab({ trip, onEdit }: Props) {
       db.categories.toArray(),
       db.itineraryItems.where('tripId').equals(trip.id).toArray(),
     ]);
+    const kinds = await db.itemKinds.toArray();
     expenses.sort((a, b) => (a.datetime < b.datetime ? 1 : -1)); // 新しい順
-    return { expenses, categories: new Map(categories.map((c) => [c.id, c])), items: new Map(items.map((i) => [i.id, i])), itemList: items };
+    return { expenses, categories: new Map(categories.map((c) => [c.id, c])), items: new Map(items.map((i) => [i.id, i])), itemList: items, kinds };
   }, [trip.id]);
 
   const summary = useMemo(
@@ -70,7 +71,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const budget = trip.budget > 0 ? convert(trip.budget, JPY, display, trip) : 0;
   const over = budget > 0 && summary.total > budget;
   // 見積もり：使った額＋これからの予定の予想費用
-  const fc = forecast(trip, data.expenses, data.itemList, display);
+  const fc = forecast(trip, data.expenses, data.itemList, display, data.kinds);
   const planned = plannedItems(data.itemList, data.expenses).sort(
     (a, b) => a.date.localeCompare(b.date) || a.order - b.order, // 旅程と同じ並び
   );

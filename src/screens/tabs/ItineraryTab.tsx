@@ -11,6 +11,7 @@ import { expenseCurrency } from '../../lib/money';
 import { shareOf } from '../../lib/split';
 import { copyText } from '../../lib/clipboard';
 import { useLongPressReorder } from '../../hooks/useLongPressReorder';
+import { KindsContext, useItemKinds, useKindsContext } from '../../hooks/useKinds';
 import { ItemSheet } from '../../components/ItemSheet';
 import { DuplicateSheet } from '../../components/DuplicateSheet';
 import { Sheet } from '../../components/Sheet';
@@ -22,6 +23,7 @@ type Props = { trip: Trip };
 
 export function ItineraryTab({ trip }: Props) {
   const days = useMemo(() => tripDays(trip), [trip]);
+  const kinds = useItemKinds();
   const [selected, setSelected] = useState(() => {
     // 旅行中は今日（現地の日付）のタブを最初に開く
     const today = nowWall(trip).date;
@@ -121,7 +123,7 @@ export function ItineraryTab({ trip }: Props) {
   );
 
   return (
-    <>
+    <KindsContext.Provider value={kinds}>
       <nav className="day-tabs" aria-label="日付">
         {days.map((d) => (
           <button
@@ -249,7 +251,7 @@ export function ItineraryTab({ trip }: Props) {
           </div>
         </Sheet>
       )}
-    </>
+    </KindsContext.Provider>
   );
 }
 
@@ -275,6 +277,7 @@ function otherText(trip: Trip, date: string, time: string, side: 'local' | 'japa
 }
 
 function ItemCardBody({ item, trip, tzDiff, currency, actual, showDate, onMenu }: CardProps) {
+  const kinds = useKindsContext();
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   // 予想費用は円で入れていることもあるので、現地通貨にそろえて比べる
   const estLocal =
@@ -305,8 +308,8 @@ function ItemCardBody({ item, trip, tzDiff, currency, actual, showDate, onMenu }
       <div className="item-main">
         <div className="item-title-row">
           <span className="item-title">
-            <span className="item-kind" title={kindMeta(item.kind).label}>
-              {itemIcon(item)}
+            <span className="item-kind" title={kindMeta(item.kind, kinds).name}>
+              {itemIcon(item, kinds)}
             </span>
             {item.title}
           </span>
@@ -412,6 +415,7 @@ function PlaceLink({ place }: { place: string }) {
 
 /** 日をまたぐ移動の、到着日（と途中の日）に出すカード */
 function ContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day: string; tzDiff: boolean }) {
+  const kinds = useKindsContext();
   const arriving = item.arrivalDate === day;
   return (
     <>
@@ -429,7 +433,7 @@ function ContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day: str
       <div className="item-main">
         <div className="item-title-row">
           <span className="item-title">
-            <span className="item-kind">{itemIcon(item)}</span>
+            <span className="item-kind">{itemIcon(item, kinds)}</span>
             {item.title}
           </span>
         </div>
@@ -450,6 +454,7 @@ function ContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day: str
 
 /** 連泊の途中の日・チェックアウトの日に出すカード */
 function StayContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day: string; tzDiff: boolean }) {
+  const kinds = useKindsContext();
   const kind = stayOn(item, day);
   const nights = nightsOf(item);
   // 何泊目か（チェックインの日の夜が1泊目）
@@ -466,7 +471,7 @@ function StayContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day:
           <div className="item-cont-note">今夜の宿（{nth}泊目／{nights}泊）</div>
           <div className="item-title-row">
             <span className="item-title">
-              <span className="item-kind">{itemIcon(item)}</span>
+              <span className="item-kind">{itemIcon(item, kinds)}</span>
               {item.title}
             </span>
           </div>
@@ -495,7 +500,7 @@ function StayContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day:
       <div className="item-main">
         <div className="item-title-row">
           <span className="item-title">
-            <span className="item-kind">{itemIcon(item)}</span>
+            <span className="item-kind">{itemIcon(item, kinds)}</span>
             {item.title}
           </span>
         </div>

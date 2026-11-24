@@ -9,14 +9,19 @@ const STATUS_LABEL: Record<TripStatus, string> = { ongoing: '旅行中', upcomin
 
 export function TripListScreen() {
   const data = useLiveQuery(async () => {
-    const [trips, expenses, items] = await Promise.all([db.trips.toArray(), db.expenses.toArray(), db.itineraryItems.toArray()]);
+    const [trips, expenses, items, kinds] = await Promise.all([
+      db.trips.toArray(),
+      db.expenses.toArray(),
+      db.itineraryItems.toArray(),
+      db.itemKinds.toArray(),
+    ]);
     // 予算は自分の分なので、カードにも自分の負担分と見積もりを出す（円）
     const spent = new Map<string, number>();
     const total = new Map<string, number>();
     for (const t of trips) {
       const ex = expenses.filter((e) => e.tripId === t.id);
       spent.set(t.id, myTotal(t, ex));
-      total.set(t.id, forecast(t, ex, items.filter((i) => i.tripId === t.id), 'JPY').total);
+      total.set(t.id, forecast(t, ex, items.filter((i) => i.tripId === t.id), 'JPY', kinds).total);
     }
     return { trips: sortTrips(trips), spent, total };
   });
@@ -24,7 +29,10 @@ export function TripListScreen() {
   return (
     <div className="screen">
       <header className="app-header">
-        <h1>旅行一覧</h1>
+        <h1 className="grow">旅行一覧</h1>
+        <button className="btn btn-ghost btn-small" onClick={() => navigate({ name: 'settings' })}>
+          ⚙ 設定
+        </button>
       </header>
 
       <main className="content">

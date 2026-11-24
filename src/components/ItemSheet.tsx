@@ -2,7 +2,9 @@ import { useState } from 'react';
 import type { ItemKind, ItineraryItem, Transport, Trip } from '../db/types';
 import { createItem, deleteItem, updateItem, type ItemInput } from '../db/itineraryRepo';
 import { db } from '../db/db';
-import { addDays, daysBetween, fallbackTitle, ITEM_KINDS, normalizeUrl, TRANSPORTS, tripDays } from '../lib/itinerary';
+import { addDays, daysBetween, fallbackTitle, normalizeUrl, TRANSPORTS, tripDays } from '../lib/itinerary';
+import { useItemKinds } from '../hooks/useKinds';
+import { IconNameSheet } from './IconNameSheet';
 import { hasTimeDiff, otherZoneTime, wallToMs, zoneOf, type ZoneSide } from '../lib/timezone';
 import { formatMd } from '../lib/date';
 import { parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
@@ -21,7 +23,7 @@ type Props = {
 
 const opt = (s: string) => (s.trim() ? s.trim() : undefined);
 
-const TITLE_PLACEHOLDER: Record<ItemKind, string> = {
+const TITLE_PLACEHOLDER: Record<string, string> = {
   move: '例：JAL 501便（空なら「飛行機」など）',
   food: '例：にしんそば',
   sightseeing: '例：清水寺',
@@ -33,6 +35,8 @@ const TITLE_PLACEHOLDER: Record<ItemKind, string> = {
 /** 予定の追加・編集 */
 export function ItemSheet({ trip, item, defaultDate, onClose, onDuplicate }: Props) {
   const [kind, setKind] = useState<ItemKind>(item?.kind ?? 'other');
+  const kinds = useItemKinds();
+  const [addingKind, setAddingKind] = useState(false);
   const [transport, setTransport] = useState<Transport>(item?.transport ?? 'train');
   const [date, setDate] = useState(item?.date ?? defaultDate);
   // 前に「チェックイン」欄だけ入れていた宿泊は、その時刻をチェックイン（時刻）として使う
@@ -154,21 +158,25 @@ export function ItemSheet({ trip, item, defaultDate, onClose, onDuplicate }: Pro
         <div className="field">
           <span className="label">種類</span>
           <div className="kind-grid" role="radiogroup" aria-label="種類">
-            {ITEM_KINDS.map((k) => (
+            {kinds.map((k) => (
               <button
-                key={k.key}
+                key={k.id}
                 type="button"
                 role="radio"
-                aria-checked={k.key === kind}
-                className={`kind-btn ${k.key === kind ? 'active' : ''}`}
-                onClick={() => setKind(k.key)}
+                aria-checked={k.id === kind}
+                className={`kind-btn ${k.id === kind ? 'active' : ''}`}
+                onClick={() => setKind(k.id)}
               >
                 <span className="kind-icon">{k.icon}</span>
-                {k.label}
+                {k.name}
               </button>
             ))}
+            <button type="button" className="kind-btn add-tile" onClick={() => setAddingKind(true)}>
+              ＋ 追加
+            </button>
           </div>
         </div>
+        {addingKind && <IconNameSheet mode="kind" onClose={() => setAddingKind(false)} onSaved={(id) => setKind(id)} />}
 
         {isMove && (
           <div className="field">
@@ -294,7 +302,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose, onDuplicate }: Pro
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={TITLE_PLACEHOLDER[kind]}
+            placeholder={TITLE_PLACEHOLDER[kind] ?? '例：予定の名前'}
           />
         </label>
 

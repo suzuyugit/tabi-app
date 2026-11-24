@@ -1,4 +1,5 @@
-import type { Expense, ItemKind, ItineraryItem, Trip } from '../db/types';
+import type { Expense, ItemKindDef, ItineraryItem, Trip } from '../db/types';
+import { DEFAULT_ITEM_KINDS, OTHER_CATEGORY } from './kinds';
 import { isoDate } from './datetime';
 import { shareOf } from './split';
 import { convert, JPY, tripCurrency } from './currency';
@@ -83,16 +84,6 @@ export function estimateIn(item: Pick<ItineraryItem, 'estimatedCost' | 'estimate
   return convert(item.estimatedCost ?? 0, item.estimatedCurrency ?? tripCurrency(trip), display, trip);
 }
 
-/** 予定の種類 → 支出のカテゴリ（見積もりをカテゴリ別に分けるため） */
-export const KIND_CATEGORY: Record<ItemKind, string> = {
-  move: 'cat-01-transport',
-  stay: 'cat-02-hotel',
-  food: 'cat-03-food',
-  sightseeing: 'cat-05-sightseeing',
-  shopping: 'cat-06-souvenir',
-  other: 'cat-07-other',
-};
-
 export type Forecast = {
   spent: number; // 使った額（自分の負担分）
   planned: number; // これからの予定の予想費用の合計
@@ -107,6 +98,7 @@ export function forecast(
   expenses: Expense[],
   items: Pick<ItineraryItem, 'id' | 'date' | 'kind' | 'estimatedCost' | 'estimatedCurrency'>[],
   display: string,
+  kinds: ItemKindDef[] = DEFAULT_ITEM_KINDS,
 ): Forecast {
   const me = trip.members.find((m) => m.isMe)?.id ?? '';
   const spent = summarize(expenses, 'me', me, display, trip).total;
@@ -117,7 +109,8 @@ export function forecast(
     const v = estimateIn(it, display, trip);
     planned += v;
     plannedByDay.set(it.date, (plannedByDay.get(it.date) ?? 0) + v);
-    const cat = KIND_CATEGORY[it.kind] ?? KIND_CATEGORY.other;
+    // 予定の種類に決めてあるカテゴリに入れる
+    const cat = kinds.find((k) => k.id === it.kind)?.categoryId ?? OTHER_CATEGORY;
     plannedByCategory.set(cat, (plannedByCategory.get(cat) ?? 0) + v);
   }
   return { spent, planned, total: spent + planned, plannedByDay, plannedByCategory };
