@@ -3,14 +3,16 @@ import { db } from '../db/db';
 import { navigate } from '../router';
 import { formatRange, formatYen } from '../lib/date';
 import { sortTrips, tripStatus, type TripStatus } from '../lib/trips';
+import { myTotal } from '../lib/money';
 
 const STATUS_LABEL: Record<TripStatus, string> = { ongoing: '旅行中', upcoming: 'これから', past: '終わった旅行' };
 
 export function TripListScreen() {
   const data = useLiveQuery(async () => {
     const [trips, expenses] = await Promise.all([db.trips.toArray(), db.expenses.toArray()]);
+    // 予算は自分の分なので、カードにも自分の負担分を出す
     const spent = new Map<string, number>();
-    for (const e of expenses) spent.set(e.tripId, (spent.get(e.tripId) ?? 0) + e.amount);
+    for (const t of trips) spent.set(t.id, myTotal(t, expenses.filter((e) => e.tripId === t.id)));
     return { trips: sortTrips(trips), spent };
   });
 
@@ -46,6 +48,7 @@ export function TripListScreen() {
                     <div className="trip-dates">{formatRange(t.startDate, t.endDate)}</div>
                     <div className="trip-members">{t.members.map((m) => m.name).join('・')}</div>
                     <div className="trip-money">
+                      <span className="muted small">自分 </span>
                       <span className={over ? 'over' : ''}>{formatYen(used)}</span>
                       <span className="muted"> / {t.budget > 0 ? formatYen(t.budget) : '予算なし'}</span>
                     </div>

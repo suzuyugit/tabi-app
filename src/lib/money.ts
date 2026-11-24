@@ -29,10 +29,10 @@ export function summarize(expenses: Expense[], mode: ViewMode, meId: string): Mo
   return { total, byCategory, byDay };
 }
 
-/** 表示モードでの予算。自分の負担分のときは「予算 ÷ 人数」を目安にする */
-export function budgetFor(trip: Trip, mode: ViewMode): number {
-  if (mode === 'group' || trip.members.length === 0) return trip.budget;
-  return Math.floor(trip.budget / trip.members.length);
+/** 自分の負担分の合計（予算と比べる額） */
+export function myTotal(trip: Pick<Trip, 'members'>, expenses: Expense[]): number {
+  const me = trip.members.find((m) => m.isMe)?.id;
+  return me ? expenses.reduce((a, e) => a + shareOf(e, me), 0) : 0;
 }
 
 /** 現金の残り = 出発時の手持ち − 自分が現金で払った額。手持ちが未設定なら undefined */

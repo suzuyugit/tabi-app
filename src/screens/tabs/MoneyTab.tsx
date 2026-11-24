@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { Category, Expense, Trip } from '../../db/types';
-import { budgetFor, cashRemaining, summarize, valueOf, type ViewMode } from '../../lib/money';
+import { cashRemaining, summarize, valueOf, type ViewMode } from '../../lib/money';
 import { isoDate, isoTime } from '../../lib/datetime';
 import { formatMd, formatYen } from '../../lib/date';
 import { tripDays } from '../../lib/itinerary';
@@ -12,9 +12,9 @@ const VIEW_KEY = 'tabi.moneyView';
 
 function loadView(): ViewMode {
   try {
-    return localStorage.getItem(VIEW_KEY) === 'me' ? 'me' : 'group';
+    return localStorage.getItem(VIEW_KEY) === 'group' ? 'group' : 'me';
   } catch {
-    return 'group';
+    return 'me';
   }
 }
 
@@ -48,7 +48,8 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const summary = useMemo(() => (data ? summarize(data.expenses, mode, meId) : undefined), [data, mode, meId]);
   if (!data || !summary) return null;
 
-  const budget = budgetFor(trip, mode);
+  // 予算は自分の分だけ。グループ全体の表示では予算と比べない
+  const budget = mode === 'me' ? trip.budget : 0;
   const over = budget > 0 && summary.total > budget;
   const cash = cashRemaining(trip, data.expenses);
 
@@ -81,11 +82,11 @@ export function MoneyTab({ trip, onEdit }: Props) {
   return (
     <div className="money">
       <div className="seg" role="tablist" aria-label="表示">
-        <button role="tab" aria-selected={mode === 'group'} className={mode === 'group' ? 'active' : ''} onClick={() => setMode('group')}>
-          グループ全体
-        </button>
         <button role="tab" aria-selected={mode === 'me'} className={mode === 'me' ? 'active' : ''} onClick={() => setMode('me')}>
           自分の負担分
+        </button>
+        <button role="tab" aria-selected={mode === 'group'} className={mode === 'group' ? 'active' : ''} onClick={() => setMode('group')}>
+          グループ全体
         </button>
       </div>
 
@@ -102,11 +103,12 @@ export function MoneyTab({ trip, onEdit }: Props) {
             </div>
             <div className={`budget-rest ${over ? 'over' : ''}`}>
               {over ? `⚠ ${formatYen(summary.total - budget)} オーバー` : `残り ${formatYen(budget - summary.total)}`}
-              {mode === 'me' && <span className="muted">（予算 ÷ {trip.members.length}人）</span>}
             </div>
           </>
-        ) : (
+        ) : mode === 'me' ? (
           <div className="muted small">予算は旅行の編集画面で設定できます</div>
+        ) : (
+          trip.budget > 0 && <div className="muted small">予算（自分の分）は「自分の負担分」で見られます</div>
         )}
       </section>
 

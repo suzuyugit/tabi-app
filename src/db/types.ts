@@ -7,7 +7,7 @@ export type Trip = {
   name: string;
   startDate: string; // YYYY-MM-DD
   endDate: string;
-  budget: number; // 予算（円）
+  budget: number; // 予算（円）。自分の分だけ（0 なら予算なし）
   members: Member[]; // 自分＋友人
   cashOnHand?: number; // 出発時の自分の手持ち現金
   createdAt: string;

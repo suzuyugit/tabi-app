@@ -225,13 +225,13 @@ export function TripFormScreen({ tripId }: Props) {
         </fieldset>
 
         <label className="field">
-          <span className="label">予算（グループ全体・円）</span>
+          <span className="label">予算（自分の分・円）</span>
           <input
             inputMode="numeric"
             pattern="[0-9]*"
             value={budget}
             onChange={(e) => setBudget(e.target.value)}
-            placeholder="例：90000（空なら予算なし）"
+            placeholder="例：30000（空なら予算なし）"
           />
         </label>
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sharesOf, validateExpense } from './split';
-import { budgetFor, cashRemaining, summarize } from './money';
+import { cashRemaining, myTotal, summarize } from './money';
 import type { Expense, Trip } from '../db/types';
 
 const base = { paidBy: 'a', splitAmong: ['a', 'b', 'c'], splitMode: 'equal' as const };
@@ -55,9 +55,8 @@ describe('money', () => {
     const m = summarize(list, 'me', 'a');
     expect(m.total).toBe(10000 + 3000 + 500);
   });
-  it('予算：自分は人数で割る', () => {
-    expect(budgetFor(trip, 'group')).toBe(90000);
-    expect(budgetFor(trip, 'me')).toBe(30000);
+  it('予算と比べる額は自分の負担分の合計', () => {
+    expect(myTotal(trip, list)).toBe(10000 + 3000 + 500);
   });
   it('現金の残り：自分が現金で払った分だけ減る', () => {
     expect(cashRemaining(trip, list)).toEqual({ start: 20000, paid: 1500, rest: 18500 });
