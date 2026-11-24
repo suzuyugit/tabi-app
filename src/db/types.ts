@@ -39,7 +39,8 @@ export type ItineraryItem = {
   arrivalDate?: string; // 到着日（YYYY-MM-DD）。未設定なら date と同じ日
   arrivalIn?: 'local' | 'japan'; // arrivalTime が現地時間か日本時間か
   memo?: string;
-  estimatedCost?: number; // 現地通貨の最小単位
+  estimatedCost?: number; // estimatedCurrency の最小単位
+  estimatedCurrency?: string; // 予想費用の通貨（現地通貨か円）。未設定なら旅行の現地通貨
   reservationNo?: string;
   checkInTime?: string; // HH:mm
   url?: string;

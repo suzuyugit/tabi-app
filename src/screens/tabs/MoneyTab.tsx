@@ -236,7 +236,12 @@ export function MoneyTab({ trip, onEdit }: Props) {
                     </span>
                     <span className="expense-amount">
                       {formatMoney(e.amount, cur)}
-                      {cur !== display && <span className="expense-conv">≈ {fmt(convert(e.amount, cur, display, trip))}</span>}
+                      {foreign && (
+                        // 払った通貨ともう片方の通貨の両方を出す
+                        <span className="expense-conv">
+                          ≈ {formatMoney(convert(e.amount, cur, cur === JPY ? local : JPY, trip), cur === JPY ? local : JPY)}
+                        </span>
+                      )}
                       <span className="expense-mine">自分 {fmt(valueIn(e, 'me', meId, display, trip))}</span>
                     </span>
                   </button>

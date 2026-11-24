@@ -6,7 +6,7 @@ import { deleteItem, reorderItems } from '../../db/itineraryRepo';
 import { byOrder, continuesOn, insertIndex, itemIcon, itemKey, kindMeta, mapsUrl, routeUrl, tripDays } from '../../lib/itinerary';
 import { dayShiftLabel, hasTimeDiff, localMinutes, nowWall, otherZoneTime } from '../../lib/timezone';
 import { formatMd } from '../../lib/date';
-import { convert, formatMoney, tripCurrency } from '../../lib/currency';
+import { convert, formatMoney, JPY, tripCurrency } from '../../lib/currency';
 import { expenseCurrency } from '../../lib/money';
 import { copyText } from '../../lib/clipboard';
 import { useLongPressReorder } from '../../hooks/useLongPressReorder';
@@ -207,7 +207,16 @@ function otherText(trip: Trip, date: string, time: string, side: 'local' | 'japa
 
 function ItemCardBody({ item, trip, tzDiff, currency, actual, showDate, onMenu }: CardProps) {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-  const over = actual !== undefined && item.estimatedCost !== undefined && actual > item.estimatedCost;
+  // 予想費用は円で入れていることもあるので、現地通貨にそろえて比べる
+  const estLocal =
+    item.estimatedCost !== undefined ? convert(item.estimatedCost, item.estimatedCurrency ?? currency, currency, trip) : undefined;
+  const over = actual !== undefined && estLocal !== undefined && actual > estLocal;
+  const foreign = currency !== JPY;
+  /** 海外では「$20（≈3,000円）」のように両方の通貨で出す */
+  const both = (minor: number, cur: string) => {
+    const other = cur === JPY ? currency : JPY;
+    return foreign ? `${formatMoney(minor, cur)}（≈${formatMoney(convert(minor, cur, other, trip), other)}）` : formatMoney(minor, cur);
+  };
 
   return (
     <>
@@ -305,8 +314,10 @@ function ItemCardBody({ item, trip, tzDiff, currency, actual, showDate, onMenu }
         )}
         {(item.estimatedCost !== undefined || actual !== undefined) && (
           <div className="item-cost">
-            {item.estimatedCost !== undefined && <span className="muted">予想 {formatMoney(item.estimatedCost, currency)}</span>}
-            {actual !== undefined && <span className={over ? 'over' : ''}>実際 {formatMoney(actual, currency)}</span>}
+            {item.estimatedCost !== undefined && (
+              <span className="muted">予想 {both(item.estimatedCost, item.estimatedCurrency ?? currency)}</span>
+            )}
+            {actual !== undefined && <span className={over ? 'over' : ''}>実際 {both(actual, currency)}</span>}
           </div>
         )}
         {item.memo && <div className="item-memo">{item.memo}</div>}

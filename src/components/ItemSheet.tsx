@@ -4,7 +4,8 @@ import { createItem, deleteItem, updateItem, type ItemInput } from '../db/itiner
 import { addDays, daysBetween, fallbackTitle, ITEM_KINDS, normalizeUrl, TRANSPORTS, tripDays } from '../lib/itinerary';
 import { hasTimeDiff, otherZoneTime, wallToMs, zoneOf, type ZoneSide } from '../lib/timezone';
 import { formatMd } from '../lib/date';
-import { currencyInfo, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
+import { parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
+import { MoneyField } from './MoneyField';
 import { Sheet } from './Sheet';
 import { showToast } from './Toast';
 
@@ -41,7 +42,8 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   const [title, setTitle] = useState(item && !(item.kind === 'move' && item.title === fallbackTitle(item)) ? item.title : '');
   const [places, setPlaces] = useState<string[]>(item?.places?.length ? item.places : ['']);
   const local = tripCurrency(trip);
-  const [cost, setCost] = useState(toInputValue(item?.estimatedCost, local));
+  const [costCurrency, setCostCurrency] = useState(item?.estimatedCurrency ?? local);
+  const [cost, setCost] = useState(toInputValue(item?.estimatedCost, item?.estimatedCurrency ?? local));
   const [reservationNo, setReservationNo] = useState(item?.reservationNo ?? '');
   const [checkInTime, setCheckInTime] = useState(item?.checkInTime ?? '');
   const [url, setUrl] = useState(item?.url ?? '');
@@ -59,7 +61,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   const removePlace = (i: number) => setPlaces((ps) => (ps.length === 1 ? [''] : ps.filter((_, j) => j !== i)));
 
   const save = async () => {
-    const costNum = parseMoneyInput(cost, local);
+    const costNum = parseMoneyInput(cost, costCurrency);
     const move = isMove
       ? {
           transport,
@@ -83,6 +85,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
       ...move,
       memo: opt(memo),
       estimatedCost: costNum,
+      estimatedCurrency: costNum !== undefined && costCurrency !== local ? costCurrency : undefined,
       reservationNo: opt(reservationNo),
       checkInTime: opt(checkInTime),
       url: normalizeUrl(url),
@@ -271,10 +274,15 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
           </button>
         </div>
 
-        <label className="field">
-          <span className="label">予想費用（{local === JPY ? '円' : currencyInfo(local).name}）</span>
-          <input inputMode={currencyInfo(local).decimals > 0 ? 'decimal' : 'numeric'} value={cost} onChange={(e) => setCost(e.target.value)} placeholder="例：500" />
-        </label>
+        <MoneyField
+          trip={trip}
+          label="予想費用"
+          value={cost}
+          currency={costCurrency}
+          onChange={setCost}
+          onCurrencyChange={setCostCurrency}
+          placeholder="例：500"
+        />
 
         {showMore ? (
           <>
