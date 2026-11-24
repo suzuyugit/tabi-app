@@ -1,4 +1,4 @@
-import type { Expense, Trip } from '../db/types';
+import type { Expense, ItineraryItem, Trip } from '../db/types';
 import { isoDate } from './datetime';
 import { shareOf } from './split';
 import { convert, JPY, tripCurrency } from './currency';
@@ -70,4 +70,41 @@ export function cashRemaining(
     .filter((e) => e.paidBy === me && e.paymentMethod === 'cash' && expenseCurrency(e) === local)
     .reduce((a, e) => a + e.amount, 0);
   return { start: trip.cashOnHand, paid, rest: trip.cashOnHand - paid, currency: local };
+}
+
+/** 支出がまだひも付いていない、予想費用のある予定（＝これから使う見込みの予定） */
+export function plannedItems<T extends Pick<ItineraryItem, 'id' | 'estimatedCost'>>(items: T[], expenses: Pick<Expense, 'itemId'>[]): T[] {
+  const linked = new Set(expenses.map((e) => e.itemId).filter(Boolean));
+  return items.filter((it) => it.estimatedCost !== undefined && it.estimatedCost > 0 && !linked.has(it.id));
+}
+
+/** 予定の予想費用（1人あたり）を表示通貨に換算 */
+export function estimateIn(item: Pick<ItineraryItem, 'estimatedCost' | 'estimatedCurrency'>, display: string, trip: Pick<Trip, 'currency' | 'rate'>): number {
+  return convert(item.estimatedCost ?? 0, item.estimatedCurrency ?? tripCurrency(trip), display, trip);
+}
+
+export type Forecast = {
+  spent: number; // 使った額（自分の負担分）
+  planned: number; // これからの予定の予想費用の合計
+  total: number; // 見積もり = spent + planned
+  plannedByDay: Map<string, number>;
+};
+
+/** 旅行でいくら使うかの見積もり（自分の分・表示通貨） */
+export function forecast(
+  trip: Pick<Trip, 'members' | 'currency' | 'rate' | 'timeZone'>,
+  expenses: Expense[],
+  items: Pick<ItineraryItem, 'id' | 'date' | 'estimatedCost' | 'estimatedCurrency'>[],
+  display: string,
+): Forecast {
+  const me = trip.members.find((m) => m.isMe)?.id ?? '';
+  const spent = summarize(expenses, 'me', me, display, trip).total;
+  const plannedByDay = new Map<string, number>();
+  let planned = 0;
+  for (const it of plannedItems(items, expenses)) {
+    const v = estimateIn(it, display, trip);
+    planned += v;
+    plannedByDay.set(it.date, (plannedByDay.get(it.date) ?? 0) + v);
+  }
+  return { spent, planned, total: spent + planned, plannedByDay };
 }

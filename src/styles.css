@@ -1470,3 +1470,123 @@ textarea {
   flex-wrap: wrap;
   gap: 2px 12px;
 }
+
+/* --- 見積もり（使った額＋これからの予定） --- */
+.bar.stack {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  overflow: visible;
+}
+
+.bar.stack .bar-fill {
+  border-radius: 5px;
+}
+
+/* これからの予定：同じ色を薄くして斜線（色だけに頼らない） */
+.bar-fill.planned,
+.hbar-fill.planned,
+.swatch.planned {
+  background: repeating-linear-gradient(135deg, var(--primary) 0 2px, var(--primary-weak) 2px 6px);
+}
+
+.bar-fill.planned.over {
+  background: repeating-linear-gradient(135deg, var(--danger) 0 2px, var(--danger-weak) 2px 6px);
+}
+
+.budget-tick {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+}
+
+.legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--primary);
+}
+
+.forecast-calc {
+  margin-bottom: 4px;
+}
+
+.planned-list {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.planned-list summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+  min-height: 32px;
+}
+
+.planned-list ul {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.planned-list li {
+  display: grid;
+  grid-template-columns: 82px 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.planned-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planned-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.hbar-track {
+  display: flex;
+  gap: 2px;
+}
+
+.hbar-fill {
+  flex: none;
+}
+
+.hbar-planned {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.trip-forecast {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}

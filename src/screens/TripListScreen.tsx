@@ -3,17 +3,22 @@ import { db } from '../db/db';
 import { navigate } from '../router';
 import { formatRange, formatYen } from '../lib/date';
 import { sortTrips, tripStatus, type TripStatus } from '../lib/trips';
-import { myTotal } from '../lib/money';
+import { forecast, myTotal } from '../lib/money';
 
 const STATUS_LABEL: Record<TripStatus, string> = { ongoing: '旅行中', upcoming: 'これから', past: '終わった旅行' };
 
 export function TripListScreen() {
   const data = useLiveQuery(async () => {
-    const [trips, expenses] = await Promise.all([db.trips.toArray(), db.expenses.toArray()]);
-    // 予算は自分の分なので、カードにも自分の負担分を出す
+    const [trips, expenses, items] = await Promise.all([db.trips.toArray(), db.expenses.toArray(), db.itineraryItems.toArray()]);
+    // 予算は自分の分なので、カードにも自分の負担分と見積もりを出す（円）
     const spent = new Map<string, number>();
-    for (const t of trips) spent.set(t.id, myTotal(t, expenses.filter((e) => e.tripId === t.id)));
-    return { trips: sortTrips(trips), spent };
+    const total = new Map<string, number>();
+    for (const t of trips) {
+      const ex = expenses.filter((e) => e.tripId === t.id);
+      spent.set(t.id, myTotal(t, ex));
+      total.set(t.id, forecast(t, ex, items.filter((i) => i.tripId === t.id), 'JPY').total);
+    }
+    return { trips: sortTrips(trips), spent, total };
   });
 
   return (
@@ -55,6 +60,12 @@ export function TripListScreen() {
                     {t.budget > 0 && (
                       <div className="bar">
                         <div className={`bar-fill ${over ? 'over' : ''}`} style={{ width: `${ratio * 100}%` }} />
+                      </div>
+                    )}
+                    {(data.total.get(t.id) ?? 0) > used && (
+                      <div className={`trip-forecast ${t.budget > 0 && (data.total.get(t.id) ?? 0) > t.budget ? 'over' : 'muted'}`}>
+                        見積もり {formatYen(data.total.get(t.id) ?? 0)}
+                        {t.budget > 0 && (data.total.get(t.id) ?? 0) > t.budget ? '（予算オーバーの見込み）' : ''}
                       </div>
                     )}
                   </button>

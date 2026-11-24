@@ -80,3 +80,34 @@ describe('money', () => {
     expect(cashRemaining(usd, mixed)).toEqual({ start: 20000, paid: 3000, rest: 17000, currency: 'USD' });
   });
 });
+
+import { forecast, plannedItems } from './money';
+
+describe('見積もり', () => {
+  const trip: Trip = {
+    id: 't', name: 'x', startDate: '2026-12-01', endDate: '2026-12-02', budget: 50000, createdAt: '', currency: 'USD', rate: 150,
+    members: [{ id: 'a', name: 'A', isMe: true }, { id: 'b', name: 'B', isMe: false }],
+  };
+  const items = [
+    { id: 'i1', date: '2026-12-01', estimatedCost: 5000 }, // $50（ひも付いた支出あり → 実際の額を使う）
+    { id: 'i2', date: '2026-12-02', estimatedCost: 3000 }, // $30（これから）
+    { id: 'i3', date: '2026-12-02', estimatedCost: 6000, estimatedCurrency: 'JPY' }, // 6,000円（これから）
+    { id: 'i4', date: '2026-12-02' }, // 予想なし
+  ];
+  const expenses: Expense[] = [
+    { id: 'e1', tripId: 't', amount: 12000, currency: 'USD', categoryId: 'c', paymentMethod: 'card', datetime: '2026-12-01T12:00:00+09:00', itemId: 'i1', paidBy: 'a', splitAmong: ['a', 'b'], splitMode: 'equal' }, // 自分 $60
+  ];
+
+  it('支出がひも付いていない予定だけを数える', () => {
+    expect(plannedItems(items, expenses).map((i) => i.id)).toEqual(['i2', 'i3']);
+  });
+
+  it('使った額＋これからの予想費用（自分の分）', () => {
+    const f = forecast(trip, expenses, items, 'JPY');
+    expect(f.spent).toBe(9000); // $60
+    expect(f.planned).toBe(4500 + 6000);
+    expect(f.total).toBe(19500);
+    expect(f.plannedByDay.get('2026-12-02')).toBe(10500);
+    expect(forecast(trip, expenses, items, 'USD').total).toBe(6000 + 3000 + 4000); // セント
+  });
+});

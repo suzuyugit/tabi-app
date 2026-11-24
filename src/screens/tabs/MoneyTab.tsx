@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { Category, Expense, Trip } from '../../db/types';
-import { cashRemaining, expenseCurrency, summarize, valueIn } from '../../lib/money';
+import { cashRemaining, estimateIn, expenseCurrency, forecast, plannedItems, summarize, valueIn } from '../../lib/money';
 import { convert, formatMoney, isForeign, JPY, tripCurrency } from '../../lib/currency';
 import { isoDate, isoTime } from '../../lib/datetime';
 import { formatMd } from '../../lib/date';
@@ -54,7 +54,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
       db.itineraryItems.where('tripId').equals(trip.id).toArray(),
     ]);
     expenses.sort((a, b) => (a.datetime < b.datetime ? 1 : -1)); // 新しい順
-    return { expenses, categories: new Map(categories.map((c) => [c.id, c])), items: new Map(items.map((i) => [i.id, i])) };
+    return { expenses, categories: new Map(categories.map((c) => [c.id, c])), items: new Map(items.map((i) => [i.id, i])), itemList: items };
   }, [trip.id]);
 
   const summary = useMemo(
@@ -66,6 +66,13 @@ export function MoneyTab({ trip, onEdit }: Props) {
   // 予算は自分の分（円で持っている）。グループ全体の表示では予算と比べない
   const budget = trip.budget > 0 ? convert(trip.budget, JPY, display, trip) : 0;
   const over = budget > 0 && summary.total > budget;
+  // 見積もり：使った額＋これからの予定の予想費用
+  const fc = forecast(trip, data.expenses, data.itemList, display);
+  const planned = plannedItems(data.itemList, data.expenses).sort(
+    (a, b) => a.date.localeCompare(b.date) || a.order - b.order, // 旅程と同じ並び
+  );
+  const fcOver = budget > 0 && fc.total > budget;
+  const scale = Math.max(budget, fc.total, 1);
   const cash = cashRemaining(trip, data.expenses);
 
   // カテゴリ別（多い順）
@@ -82,8 +89,8 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const dayRows = [
     ...days.map((d) => ({ date: d.date, label: d.label, sub: d.sub })),
     ...extraDays.map((d) => ({ date: d, label: '日程外', sub: formatMd(d) })),
-  ].map((d) => ({ ...d, value: summary.byDay.get(d.date) ?? 0 }));
-  const dayMax = Math.max(1, ...dayRows.map((r) => r.value));
+  ].map((d) => ({ ...d, value: summary.byDay.get(d.date) ?? 0, planned: fc.plannedByDay.get(d.date) ?? 0 }));
+  const dayMax = Math.max(1, ...dayRows.map((r) => r.value + r.planned));
 
   const filtered = data.expenses.filter(
     (e) => (!dayFilter || isoDate(e.datetime, trip.timeZone) === dayFilter) && (!catFilter || e.categoryId === catFilter),
@@ -119,18 +126,73 @@ export function MoneyTab({ trip, onEdit }: Props) {
             （1 {local} = {trip.rate}円）
           </div>
         )}
-        {budget > 0 ? (
-          <>
-            <div className="bar bar-lg" role="img" aria-label={`予算の${Math.round((summary.total / budget) * 100)}%`}>
-              <div className={`bar-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(summary.total / budget, 1) * 100}%` }} />
-            </div>
-            <div className={`budget-rest ${over ? 'over' : ''}`}>
-              {over ? `⚠ ${fmt(summary.total - budget)} オーバー` : `残り ${fmt(budget - summary.total)}`}
-              {display !== JPY && <span className="muted small">（予算 {formatMoney(trip.budget)}）</span>}
-            </div>
-          </>
+        <div
+          className="bar bar-lg stack"
+          role="img"
+          aria-label={`使った額 ${fmt(fc.spent)}、これからの予定 ${fmt(fc.planned)}${budget > 0 ? `、予算 ${fmt(budget)}` : ''}`}
+        >
+          {fc.spent > 0 && <div className={`bar-fill ${over ? 'over' : ''}`} style={{ width: `${(fc.spent / scale) * 100}%` }} />}
+          {fc.planned > 0 && <div className={`bar-fill planned ${fcOver ? 'over' : ''}`} style={{ width: `${(fc.planned / scale) * 100}%` }} />}
+          {budget > 0 && fc.total > budget && <div className="budget-tick" style={{ left: `${(budget / scale) * 100}%` }} />}
+        </div>
+        <ul className="legend">
+          <li>
+            <span className="swatch" />
+            使った額 {fmt(fc.spent)}
+          </li>
+          {fc.planned > 0 && (
+            <li>
+              <span className="swatch planned" />
+              これからの予定 {fmt(fc.planned)}
+            </li>
+          )}
+        </ul>
+        {budget > 0 && (
+          <div className={`budget-rest ${over ? 'over' : ''}`}>
+            {over ? `⚠ 今の時点で ${fmt(summary.total - budget)} オーバー` : `今の残り ${fmt(budget - summary.total)}`}
+            {display !== JPY && <span className="muted small">（予算 {formatMoney(trip.budget)}）</span>}
+          </div>
+        )}
+        {budget === 0 && <div className="muted small">予算は旅行の編集画面で設定できます</div>}
+      </section>
+
+      <section className="card forecast">
+        <div className="card-label">旅行全体の見積もり（自分の分）</div>
+        <div className="hero">
+          <span className={`hero-num ${fcOver ? 'over' : ''}`}>{fmt(fc.total)}</span>
+          {budget > 0 && <span className="muted"> / {fmt(budget)}</span>}
+        </div>
+        {foreign && (
+          <div className="muted small">
+            ≈ {formatMoney(convert(fc.total, display, display === JPY ? local : JPY, trip), display === JPY ? local : JPY)}
+          </div>
+        )}
+        <div className="forecast-calc muted small">
+          使った額 {fmt(fc.spent)} ＋ これからの予定 {fmt(fc.planned)}
+        </div>
+        {budget > 0 && (
+          <div className={`budget-rest ${fcOver ? 'over' : ''}`}>
+            {fcOver ? `⚠ このままだと ${fmt(fc.total - budget)} オーバーの見込み` : `予算内の見込み（あと ${fmt(budget - fc.total)} 使える）`}
+          </div>
+        )}
+        {planned.length > 0 ? (
+          <details className="planned-list">
+            <summary>見積もりに入っている予定（{planned.length}件）</summary>
+            <ul>
+              {planned.map((it) => (
+                <li key={it.id}>
+                  <span className="muted small">
+                    {formatMd(it.date)} {it.time ?? ''}
+                  </span>
+                  <span className="planned-title">{it.title}</span>
+                  <span className="planned-amount">{fmt(estimateIn(it, display, trip))}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">支出を予定にひも付けると、予想費用のかわりに実際の額で数えます。</p>
+          </details>
         ) : (
-          <div className="muted small">予算は旅行の編集画面で設定できます</div>
+          <p className="muted small">旅程の予定に「予想費用（1人あたり）」を入れると、これから使う額も見積もりに入ります。</p>
         )}
       </section>
 
@@ -182,8 +244,12 @@ export function MoneyTab({ trip, onEdit }: Props) {
               </span>
               <span className="hbar-track">
                 {r.value > 0 && <span className="hbar-fill" style={{ width: `${(r.value / dayMax) * 100}%` }} />}
+                {r.planned > 0 && <span className="hbar-fill planned" style={{ width: `${(r.planned / dayMax) * 100}%` }} />}
               </span>
-              <span className="hbar-value">{fmt(r.value)}</span>
+              <span className="hbar-value">
+                {fmt(r.value)}
+                {r.planned > 0 && <span className="hbar-planned">＋予定 {fmt(r.planned)}</span>}
+              </span>
             </li>
           ))}
         </ul>

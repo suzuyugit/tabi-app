@@ -8,6 +8,7 @@ import { dayShiftLabel, hasTimeDiff, localMinutes, nowWall, otherZoneTime } from
 import { formatMd } from '../../lib/date';
 import { convert, formatMoney, JPY, tripCurrency } from '../../lib/currency';
 import { expenseCurrency } from '../../lib/money';
+import { shareOf } from '../../lib/split';
 import { copyText } from '../../lib/clipboard';
 import { useLongPressReorder } from '../../hooks/useLongPressReorder';
 import { ItemSheet } from '../../components/ItemSheet';
@@ -36,10 +37,11 @@ export function ItineraryTab({ trip }: Props) {
       db.expenses.where('tripId').equals(trip.id).toArray(),
     ]);
     const actual = new Map<string, number>();
-    // 実際に使った額は現地通貨にそろえる（予想費用と比べるため）
+    // 実際に使った額は「自分の負担分」を現地通貨にそろえる（予想費用＝1人あたりと比べるため）
     const local = tripCurrency(trip);
+    const me = trip.members.find((m) => m.isMe)?.id ?? '';
     for (const e of expenses) {
-      if (e.itemId) actual.set(e.itemId, (actual.get(e.itemId) ?? 0) + convert(e.amount, expenseCurrency(e), local, trip));
+      if (e.itemId) actual.set(e.itemId, (actual.get(e.itemId) ?? 0) + convert(shareOf(e, me), expenseCurrency(e), local, trip));
     }
     return { items, actual };
   }, [trip]);
@@ -315,9 +317,9 @@ function ItemCardBody({ item, trip, tzDiff, currency, actual, showDate, onMenu }
         {(item.estimatedCost !== undefined || actual !== undefined) && (
           <div className="item-cost">
             {item.estimatedCost !== undefined && (
-              <span className="muted">予想 {both(item.estimatedCost, item.estimatedCurrency ?? currency)}</span>
+              <span className="muted">予想（1人）{both(item.estimatedCost, item.estimatedCurrency ?? currency)}</span>
             )}
-            {actual !== undefined && <span className={over ? 'over' : ''}>実際 {both(actual, currency)}</span>}
+            {actual !== undefined && <span className={over ? 'over' : ''}>実際（自分）{both(actual, currency)}</span>}
           </div>
         )}
         {item.memo && <div className="item-memo">{item.memo}</div>}

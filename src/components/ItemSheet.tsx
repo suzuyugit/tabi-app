@@ -276,7 +276,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
 
         <MoneyField
           trip={trip}
-          label="予想費用"
+          label="予想費用（1人あたり）"
           value={cost}
           currency={costCurrency}
           onChange={setCost}
