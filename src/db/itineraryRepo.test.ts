@@ -76,4 +76,11 @@ describe('itineraryRepo', () => {
     const copy = (await db.itineraryItems.where('[tripId+date]').equals([T, '2026-12-05']).toArray())[0];
     expect(copy.arrivalDate).toBe('2026-12-06');
   });
+
+  it('宿泊を複製すると、チェックアウトの日も同じだけずれる', async () => {
+    const id = await createItem(T, { kind: 'stay', places: [], date: '2026-12-01', time: '15:00', title: 'ホテル', checkOutDate: '2026-12-03' });
+    await duplicateItem(id, ['2026-12-10']);
+    const copy = (await db.itineraryItems.where('[tripId+date]').equals([T, '2026-12-10']).toArray())[0];
+    expect(copy.checkOutDate).toBe('2026-12-12');
+  });
 });

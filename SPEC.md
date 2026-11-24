@@ -65,6 +65,8 @@ type ItineraryItem = {
   arrivalTime?: string;   // HH:mm
   arrivalDate?: string;   // 到着日（日をまたぐ移動）。未設定なら date と同じ
   arrivalIn?: 'local' | 'japan';
+  checkOutDate?: string;  // 宿泊のチェックアウトの日（泊数 = checkOutDate − date）。チェックインは date と time
+  checkOutTime?: string;  // HH:mm
   memo?: string;
   estimatedCost?: number; // 予想費用（1人あたり＝自分の分）
   estimatedCurrency?: string; // 予想費用の通貨（現地通貨か円）。未設定なら現地通貨
@@ -140,6 +142,7 @@ type Settlement = { tripId: string; from: string; to: string; amount: number; do
 - カードには時刻・タイトル・場所・予想費用（1人あたり）を表示。ひも付いた支出があれば、実際に使った額（自分の負担分）も並べて出す
 - カードの長押しで並び替え、タップで編集
 - 移動は到着日（前日・当日・翌日・2日後）を選べる。日をまたぐ移動は、到着日（と途中の日）の旅程にも「出発の続き」として出す
+- 宿泊は「チェックイン（時刻）・泊数・チェックアウト時刻」を持つ。チェックインの日はふつうのカード（○泊・チェックアウトの日時つき）、連泊の途中の日はその日の最後に「今夜の宿（2泊目／3泊）」、チェックアウトの日はチェックアウトの時刻の位置に「OUT」のカードを出す
 - 場所をタップすると Google マップで検索できるリンクにする（場所は複数持てる）
 - 予定には種類（移動・食事・観光・宿泊・買い物・その他）を付け、カードにアイコンで出す
 - 移動は手段（飛行機・新幹線・電車・バス・タクシー・車・徒歩・船・その他）、出発地 → 到着地、到着時刻を持つ。カードに Google マップの経路リンクを出す

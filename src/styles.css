@@ -1590,3 +1590,19 @@ textarea {
   font-size: 12px;
   font-weight: 600;
 }
+
+/* --- 宿泊（連泊・チェックアウト） --- */
+.item-stay {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.item-night {
+  background: var(--primary-weak);
+  border-color: transparent;
+}
+
+.item-night-icon {
+  font-size: 22px;
+}

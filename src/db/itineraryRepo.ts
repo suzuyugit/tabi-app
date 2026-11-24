@@ -72,7 +72,9 @@ export async function duplicateItem(id: string, dates: string[]): Promise<void> 
     for (const date of dates) {
       // 日をまたぐ移動は、到着日も同じだけずらす
       const arrivalDate = src.arrivalDate ? addDays(date, daysBetween(src.date, src.arrivalDate)) : undefined;
-      await placeInDay({ ...src, id: newId(), date, arrivalDate, order: 0 });
+      // 宿泊はチェックアウトの日も同じだけずらす
+      const checkOutDate = src.checkOutDate ? addDays(date, daysBetween(src.date, src.checkOutDate)) : undefined;
+      await placeInDay({ ...src, id: newId(), date, arrivalDate, checkOutDate, order: 0 });
     }
   });
 }

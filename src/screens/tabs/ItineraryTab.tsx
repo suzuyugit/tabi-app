@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { ItineraryItem, Trip } from '../../db/types';
 import { deleteItem, reorderItems } from '../../db/itineraryRepo';
-import { byOrder, continuesOn, insertIndex, itemIcon, itemKey, kindMeta, mapsUrl, routeUrl, tripDays } from '../../lib/itinerary';
+import { byOrder, continuesOn, insertIndex, itemIcon, itemKey, kindMeta, mapsUrl, nightsOf, routeUrl, stayOn, tripDays } from '../../lib/itinerary';
 import { dayShiftLabel, hasTimeDiff, localMinutes, nowWall, otherZoneTime } from '../../lib/timezone';
 import { formatMd } from '../../lib/date';
 import { convert, formatMoney, JPY, tripCurrency } from '../../lib/currency';
@@ -64,17 +64,25 @@ export function ItineraryTab({ trip }: Props) {
   const today = nowWall(trip).date;
   const tzDiff = hasTimeDiff(trip);
 
-  // 日をまたぐ移動は、到着する日（と途中の日）にも出す。並び替えの対象にはしない
+  // 日をまたぐ移動・連泊の宿は、その後の日にも出す。並び替えの対象にはしない
   type Row = { kind: 'item'; item: ItineraryItem; index: number } | { kind: 'cont'; item: ItineraryItem };
   const rows: Row[] = list.map((item, index) => ({ kind: 'item', item, index }));
   if (current !== OUTSIDE) {
     const keys = list.map((it) => itemKey(trip, it));
     const conts = (data?.items ?? [])
-      .filter((it) => continuesOn(it, current))
+      .filter((it) => continuesOn(it, current) || stayOn(it, current))
       .map((it) => {
+        const stay = stayOn(it, current);
+        // 連泊の途中の日は「今夜の宿」として、その日のいちばん最後に出す
+        if (stay === 'night') return { it, at: keys.length, key: Number.MAX_SAFE_INTEGER };
+        // チェックアウトの日はチェックアウトの時刻の位置（時刻がなければ先頭）
+        if (stay === 'checkout') {
+          const key = it.checkOutTime ? localMinutes(trip, current, current, it.checkOutTime, 'local') : -1e9;
+          return { it, at: it.checkOutTime ? insertIndex(keys, key) : 0, key };
+        }
         const onArrivalDay = it.arrivalDate === current && it.arrivalTime;
-        const key = onArrivalDay ? localMinutes(trip, current, it.arrivalDate!, it.arrivalTime!, it.arrivalIn) : -Infinity;
-        return { it, at: key === -Infinity ? 0 : insertIndex(keys, key), key };
+        const key = onArrivalDay ? localMinutes(trip, current, it.arrivalDate!, it.arrivalTime!, it.arrivalIn) : -1e9;
+        return { it, at: onArrivalDay ? insertIndex(keys, key) : 0, key };
       })
       .sort((a, b) => b.at - a.at || b.key - a.key);
     // 後ろから差し込むと位置がずれない
@@ -130,8 +138,16 @@ export function ItineraryTab({ trip }: Props) {
               />
             </li>
           ) : (
-            <li key={`cont-${row.item.id}`} className="item-card item-cont" onClick={() => setEditing({ item: row.item })}>
-              <ContinuationBody item={row.item} day={current} tzDiff={tzDiff} />
+            <li
+              key={`cont-${row.item.id}`}
+              className={`item-card item-cont ${stayOn(row.item, current) === 'night' ? 'item-night' : ''}`}
+              onClick={() => setEditing({ item: row.item })}
+            >
+              {row.item.kind === 'stay' ? (
+                <StayContinuationBody item={row.item} day={current} tzDiff={tzDiff} />
+              ) : (
+                <ContinuationBody item={row.item} day={current} tzDiff={tzDiff} />
+              )}
             </li>
           ),
         )}
@@ -224,6 +240,7 @@ function ItemCardBody({ item, trip, tzDiff, currency, actual, showDate, onMenu }
     <>
       <div className="item-time">
         {showDate && <span className="item-date">{formatMd(item.date)}</span>}
+        {item.kind === 'stay' && item.time && <span className="item-arrive-label">IN</span>}
         {item.time ?? <span className="item-undecided">未定</span>}
         {tzDiff && item.time && <ZoneBadge side={item.timeIn} />}
         {item.kind === 'move' && item.arrivalTime && (
@@ -263,6 +280,12 @@ function ItemCardBody({ item, trip, tzDiff, currency, actual, showDate, onMenu }
                 着 {otherText(trip, item.arrivalDate ?? item.date, item.arrivalTime, item.arrivalIn)}
               </span>
             )}
+          </div>
+        )}
+        {item.kind === 'stay' && item.checkOutDate && (
+          <div className="item-stay">
+            🛏 {nightsOf(item)}泊（{formatMd(item.checkOutDate)}
+            {item.checkOutTime ? ` ${item.checkOutTime}` : ''} チェックアウト）
           </div>
         )}
         {item.kind === 'move' && (item.from || item.to) && (
@@ -369,6 +392,65 @@ function ContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day: str
             {item.to}
           </div>
         )}
+      </div>
+    </>
+  );
+}
+
+/** 連泊の途中の日・チェックアウトの日に出すカード */
+function StayContinuationBody({ item, day, tzDiff }: { item: ItineraryItem; day: string; tzDiff: boolean }) {
+  const kind = stayOn(item, day);
+  const nights = nightsOf(item);
+  // 何泊目か（チェックインの日の夜が1泊目）
+  const nth = Math.round((Date.parse(day) - Date.parse(item.date)) / 86_400_000) + 1;
+  if (kind === 'night') {
+    return (
+      <>
+        <div className="item-time">
+          <span className="item-night-icon" aria-hidden="true">
+            🌙
+          </span>
+        </div>
+        <div className="item-main">
+          <div className="item-cont-note">今夜の宿（{nth}泊目／{nights}泊）</div>
+          <div className="item-title-row">
+            <span className="item-title">
+              <span className="item-kind">{itemIcon(item)}</span>
+              {item.title}
+            </span>
+          </div>
+          {item.places?.[0] && (
+            <a className="item-place" href={mapsUrl(item.places[0])} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+              📍 {item.places[0]}
+            </a>
+          )}
+        </div>
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="item-time">
+        {item.checkOutTime ? (
+          <>
+            <span className="item-arrive-label">OUT</span>
+            {item.checkOutTime}
+            {tzDiff && <ZoneBadge side="local" />}
+          </>
+        ) : (
+          <span className="item-undecided">OUT</span>
+        )}
+      </div>
+      <div className="item-main">
+        <div className="item-title-row">
+          <span className="item-title">
+            <span className="item-kind">{itemIcon(item)}</span>
+            {item.title}
+          </span>
+        </div>
+        <div className="item-cont-note">
+          チェックアウト（{formatMd(item.date)} から {nights}泊）
+        </div>
       </div>
     </>
   );

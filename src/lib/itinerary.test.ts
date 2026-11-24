@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { continuesOn, fallbackTitle, insertIndex, itemIcon, moveItem, nearestItem, normalizeUrl, routeUrl, tripDays } from './itinerary';
+import { continuesOn, fallbackTitle, nightsOf, stayOn, insertIndex, itemIcon, moveItem, nearestItem, normalizeUrl, routeUrl, tripDays } from './itinerary';
 
 describe('itinerary', () => {
   it('tripDays：月をまたぐ', () => {
@@ -64,5 +64,16 @@ describe('itinerary', () => {
     expect(continuesOn(ship, '2026-12-03')).toBe(true);
     expect(continuesOn(ship, '2026-12-04')).toBe(false);
     expect(continuesOn({ ...ship, kind: 'food' as const }, '2026-12-02')).toBe(false);
+  });
+
+  it('stayOn：3泊なら間の2日は連泊中、最後の日はチェックアウト', () => {
+    const hotel = { kind: 'stay' as const, date: '2026-12-01', checkOutDate: '2026-12-04' };
+    expect(nightsOf(hotel)).toBe(3);
+    expect(stayOn(hotel, '2026-12-01')).toBeUndefined();
+    expect(stayOn(hotel, '2026-12-02')).toBe('night');
+    expect(stayOn(hotel, '2026-12-03')).toBe('night');
+    expect(stayOn(hotel, '2026-12-04')).toBe('checkout');
+    expect(stayOn(hotel, '2026-12-05')).toBeUndefined();
+    expect(stayOn({ ...hotel, kind: 'food' as const }, '2026-12-02')).toBeUndefined();
   });
 });

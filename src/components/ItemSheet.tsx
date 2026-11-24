@@ -27,9 +27,13 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   const [kind, setKind] = useState<ItemKind>(item?.kind ?? 'other');
   const [transport, setTransport] = useState<Transport>(item?.transport ?? 'train');
   const [date, setDate] = useState(item?.date ?? defaultDate);
-  const [time, setTime] = useState(item?.time ?? '');
+  // 前に「チェックイン」欄だけ入れていた宿泊は、その時刻をチェックイン（時刻）として使う
+  const legacyCheckIn = item?.kind === 'stay' && !item.time ? item.checkInTime : undefined;
+  const [time, setTime] = useState(item?.time ?? legacyCheckIn ?? '');
   // 編集で時刻が入っていない予定は「未定」として開く
-  const [undecided, setUndecided] = useState(item !== undefined && !item.time);
+  const [undecided, setUndecided] = useState(item !== undefined && !item.time && !legacyCheckIn);
+  const [nights, setNights] = useState(item?.checkOutDate ? Math.max(1, daysBetween(item.date, item.checkOutDate)) : 1);
+  const [checkOutTime, setCheckOutTime] = useState(item?.checkOutTime ?? '');
   const [arrivalTime, setArrivalTime] = useState(item?.arrivalTime ?? '');
   // 到着日は「出発日から何日後か」で持つ（出発日を変えても一緒に動くように）
   const [arrivalOffset, setArrivalOffset] = useState(item?.arrivalDate ? daysBetween(item.date, item.arrivalDate) : 0);
@@ -48,10 +52,14 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   const [checkInTime, setCheckInTime] = useState(item?.checkInTime ?? '');
   const [url, setUrl] = useState(item?.url ?? '');
   const [memo, setMemo] = useState(item?.memo ?? '');
-  const [showMore, setShowMore] = useState(Boolean(item?.reservationNo || item?.checkInTime || item?.url || item?.memo));
+  const [showMore, setShowMore] = useState(
+    Boolean(item?.reservationNo || (item?.kind !== 'stay' && item?.checkInTime) || item?.url || item?.memo),
+  );
   const [error, setError] = useState('');
 
   const isMove = kind === 'move';
+  const isStay = kind === 'stay';
+  const timeLabel = isMove ? '出発時刻' : isStay ? 'チェックイン' : '時刻';
   const days = tripDays(trip);
   const dateOptions = days.map((d) => ({ value: d.date, label: `${d.label}  ${d.sub}` }));
   if (!days.some((d) => d.date === date)) dateOptions.push({ value: date, label: `日程外  ${formatMd(date)}` });
@@ -87,7 +95,10 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
       estimatedCost: costNum,
       estimatedCurrency: costNum !== undefined && costCurrency !== local ? costCurrency : undefined,
       reservationNo: opt(reservationNo),
-      checkInTime: opt(checkInTime),
+      // 宿泊はチェックインを「時刻」で持つので、別の欄は使わない
+      checkInTime: isStay ? undefined : opt(checkInTime),
+      checkOutDate: isStay ? addDays(date, nights) : undefined,
+      checkOutTime: isStay ? opt(checkOutTime) : undefined,
       url: normalizeUrl(url),
     };
     if (item) await updateItem(item.id, input);
@@ -178,7 +189,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
           </label>
           <div className="field">
             <div className="label-row">
-              <span className="label">{isMove ? '出発時刻' : '時刻'}</span>
+              <span className="label">{timeLabel}</span>
               <label className="mini-check">
                 <input type="checkbox" checked={undecided} onChange={(e) => setUndecided(e.target.checked)} />
                 未定
@@ -187,12 +198,37 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
             {undecided ? (
               <div className="time-undecided">未定</div>
             ) : (
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label={isMove ? '出発時刻' : '時刻'} />
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label={timeLabel} />
             )}
-            {tzDiff && !undecided && <ZoneToggle value={timeIn} onChange={setTimeIn} label={isMove ? '出発時刻' : '時刻'} />}
+            {tzDiff && !undecided && <ZoneToggle value={timeIn} onChange={setTimeIn} label={timeLabel} />}
             {tzDiff && !undecided && time && <OtherZone text={otherZoneTime(trip, date, time, timeIn)} />}
           </div>
         </div>
+
+        {isStay && (
+          <div className="route-fields">
+            <div className="field-row">
+              <label className="field">
+                <span className="label">泊数</span>
+                <select value={nights} onChange={(e) => setNights(Number(e.target.value))} aria-label="泊数">
+                  {Array.from({ length: 14 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}泊
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="label">チェックアウト</span>
+                <input type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} aria-label="チェックアウト" />
+              </label>
+            </div>
+            <span className="hint">
+              {formatMd(date)} チェックイン → {formatMd(addDays(date, nights))} チェックアウト
+              {tzDiff ? '（現地時間）' : ''}
+            </span>
+          </div>
+        )}
 
         {isMove && (
           <div className="route-fields">
@@ -291,10 +327,12 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
                 <span className="label">予約番号</span>
                 <input value={reservationNo} onChange={(e) => setReservationNo(e.target.value)} autoCapitalize="characters" />
               </label>
-              <label className="field">
-                <span className="label">チェックイン</span>
-                <input type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} />
-              </label>
+              {!isStay && (
+                <label className="field">
+                  <span className="label">チェックイン</span>
+                  <input type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} />
+                </label>
+              )}
             </div>
             <label className="field">
               <span className="label">予約ページの URL</span>

@@ -56,6 +56,21 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((parseYmd(to).getTime() - parseYmd(from).getTime()) / 86_400_000);
 }
 
+/**
+ * 宿泊がその日にどう関わるか。
+ * - 'night'：連泊の途中の日（その日の夜もここに泊まる）
+ * - 'checkout'：チェックアウトの日
+ */
+export function stayOn(item: Pick<ItineraryItem, 'kind' | 'date' | 'checkOutDate'>, day: string): 'night' | 'checkout' | undefined {
+  if (item.kind !== 'stay' || !item.checkOutDate || day <= item.date || day > item.checkOutDate) return undefined;
+  return day === item.checkOutDate ? 'checkout' : 'night';
+}
+
+/** 泊数 */
+export function nightsOf(item: Pick<ItineraryItem, 'date' | 'checkOutDate'>): number {
+  return item.checkOutDate ? daysBetween(item.date, item.checkOutDate) : 0;
+}
+
 /** 日をまたぐ移動の、到着日の前後にある日（その日の旅程にも出す日）か */
 export function continuesOn(item: Pick<ItineraryItem, 'kind' | 'date' | 'arrivalDate'>, day: string): boolean {
   return item.kind === 'move' && !!item.arrivalDate && item.date < day && day <= item.arrivalDate;
