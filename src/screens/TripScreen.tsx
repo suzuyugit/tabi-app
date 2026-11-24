@@ -1,8 +1,12 @@
+import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
+import type { Expense } from '../db/types';
 import { formatRange } from '../lib/date';
 import { navigate, type TabKey } from '../router';
 import { ItineraryTab } from './tabs/ItineraryTab';
+import { MoneyTab } from './tabs/MoneyTab';
+import { ExpenseSheet } from '../components/ExpenseSheet';
 
 const TABS: { key: TabKey; label: string; icon: string; step: number }[] = [
   { key: 'itinerary', label: '旅程', icon: '🗓️', step: 2 },
@@ -16,6 +20,11 @@ type Props = { tripId: string; tab: TabKey };
 export function TripScreen({ tripId, tab }: Props) {
   // null = 見つからない / undefined = 読み込み中
   const trip = useLiveQuery(async () => (await db.trips.get(tripId)) ?? null, [tripId]);
+  const [expenseSheet, setExpenseSheet] = useState<{ expense?: Expense } | null>(null);
+  // iPhone はタップの処理の中でフォーカスしないとキーボードが出ない。
+  // ＋ボタンを押した瞬間にこの見えない入力欄へフォーカスしてキーボードを出し、
+  // シートが開いたら金額欄へフォーカスを移す。
+  const keyboardProxy = useRef<HTMLInputElement>(null);
 
   if (trip === undefined) return <div className="screen" />;
   if (trip === null) {
@@ -47,6 +56,8 @@ export function TripScreen({ tripId, tab }: Props) {
       <main className="content">
         {tab === 'itinerary' ? (
           <ItineraryTab trip={trip} />
+        ) : tab === 'money' ? (
+          <MoneyTab trip={trip} onEdit={(expense) => setExpenseSheet({ expense })} />
         ) : (
           <div className="empty">
             <p>
@@ -56,6 +67,18 @@ export function TripScreen({ tripId, tab }: Props) {
           </div>
         )}
       </main>
+
+      <input ref={keyboardProxy} className="keyboard-proxy" inputMode="numeric" tabIndex={-1} aria-hidden="true" />
+      <button
+        className="fab"
+        aria-label="支出を記録"
+        onClick={() => {
+          keyboardProxy.current?.focus();
+          setExpenseSheet({});
+        }}
+      >
+        ＋
+      </button>
 
       <nav className="tabbar" aria-label="タブ">
         {TABS.map((t) => (
@@ -70,6 +93,10 @@ export function TripScreen({ tripId, tab }: Props) {
           </button>
         ))}
       </nav>
+
+      {expenseSheet && (
+        <ExpenseSheet trip={trip} expense={expenseSheet.expense} onClose={() => setExpenseSheet(null)} />
+      )}
     </div>
   );
 }
