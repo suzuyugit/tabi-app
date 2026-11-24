@@ -49,11 +49,10 @@ export function SaveListSheet({ tripId, defaultName, onClose }: { tripId: string
 export function AddFromListSheet({ tripId, onClose }: { tripId: string; onClose: () => void }) {
   const lists = useLiveQuery(() => db.packingLists.orderBy('name').toArray());
   const [listId, setListId] = useState('');
-  const [mode, setMode] = useState<'merge' | 'replace'>('merge');
   const list = lists?.find((l) => l.id === (listId || lists?.[0]?.id));
   const missing = useLiveQuery(async () => (list ? countMissingPacking(tripId, list.items) : 0), [tripId, list]);
 
-  const add = async () => {
+  const add = async (mode: 'merge' | 'replace') => {
     if (!list) return;
     if (mode === 'replace' && !confirm(`この旅行の持ち物を「${list.name}」（${list.items.length}個）に入れ替えますか？\n今ある持ち物とチェックは消えます。`)) return;
     const n = await putPackingNames(tripId, list.items, mode);
@@ -80,24 +79,7 @@ export function AddFromListSheet({ tripId, onClose }: { tripId: string; onClose:
                 </li>
               ))}
             </ul>
-            <div className="seg" role="radiogroup" aria-label="入れ方">
-              <button type="button" role="radio" aria-checked={mode === 'merge'} className={mode === 'merge' ? 'active' : ''} onClick={() => setMode('merge')}>
-                ないものだけ追加
-              </button>
-              <button type="button" role="radio" aria-checked={mode === 'replace'} className={mode === 'replace' ? 'active' : ''} onClick={() => setMode('replace')}>
-                入れ替える
-              </button>
-            </div>
-            {list && (
-              <p className="muted small">
-                {mode === 'merge'
-                  ? `この旅行にないもの ${missing ?? 0}個を追加します。今ある持ち物とチェックはそのままです。`
-                  : `この旅行の持ち物を全部消して、「${list.name}」の ${list.items.length}個にします。`}
-              </p>
-            )}
-            <button type="button" className="btn btn-primary btn-block" onClick={add} disabled={!list || (mode === 'merge' && missing === 0)}>
-              {mode === 'merge' ? (missing === 0 ? '追加するものはありません' : '追加する') : '入れ替える'}
-            </button>
+            <PutButtons missing={missing} total={list?.items.length ?? 0} disabled={!list} onPut={add} />
           </>
         )}
       </div>
@@ -159,5 +141,31 @@ export function EditListSheet({ list, onClose }: { list?: PackingList; onClose: 
         )}
       </div>
     </Sheet>
+  );
+}
+
+/** 「ないものだけ追加」「全部入れ替える」の2つのボタン（押したらすぐ実行。入れ替えは確認あり） */
+export function PutButtons({
+  missing,
+  total,
+  disabled,
+  onPut,
+}: {
+  missing: number | undefined;
+  total: number;
+  disabled?: boolean;
+  onPut: (mode: 'merge' | 'replace') => void;
+}) {
+  return (
+    <div className="put-buttons">
+      <button type="button" className="btn btn-primary btn-block" onClick={() => onPut('merge')} disabled={disabled || missing === 0}>
+        {missing === 0 ? '追加するもの（ないもの）はありません' : `ないものだけ追加（${missing ?? 0}個）`}
+      </button>
+      <p className="muted small">今ある持ち物とチェックはそのままです。</p>
+      <button type="button" className="btn btn-danger-outline btn-block" onClick={() => onPut('replace')} disabled={disabled}>
+        全部入れ替える（{total}個に）
+      </button>
+      <p className="muted small">今ある持ち物とチェックを消して、このリストにします（確認が出ます）。</p>
+    </div>
   );
 }

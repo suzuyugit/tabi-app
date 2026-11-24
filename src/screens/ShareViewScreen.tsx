@@ -6,6 +6,7 @@ import { decodePayload, type ListPayload, type TripPayload } from '../lib/share'
 import { importAsViewer, importShared } from '../db/shareRepo';
 import { lastMyName } from '../db/tripRepo';
 import { countMissingPacking, putPackingNames, savePackingList } from '../db/packingRepo';
+import { PutButtons } from '../components/PackingListSheets';
 import { formatMd, formatRange } from '../lib/date';
 import { byOrder, itemIcon, nightsOf, tripDays } from '../lib/itinerary';
 import { settleCurrencyOf, settlementForTrip } from '../lib/settlement';
@@ -43,13 +44,12 @@ function PackingShareView({ payload }: { payload: ListPayload }) {
   const { list } = payload;
   const trips = useLiveQuery(async () => sortTrips(await db.trips.toArray()));
   const [tripId, setTripId] = useState('');
-  const [mode, setMode] = useState<'merge' | 'replace'>('merge');
   const [listName, setListName] = useState(list.name);
   const target = tripId || trips?.[0]?.id || '';
   const missing = useLiveQuery(async () => (target ? countMissingPacking(target, list.items) : 0), [target, list.items]);
   const targetName = trips?.find((t) => t.id === target)?.name ?? '';
 
-  const toTrip = async () => {
+  const toTrip = async (mode: 'merge' | 'replace') => {
     if (!target) return;
     if (mode === 'replace' && !confirm(`「${targetName}」の持ち物を、このリスト（${list.items.length}個）に入れ替えますか？\n今ある持ち物とチェックは消えます。`)) return;
     const n = await putPackingNames(target, list.items, mode);
@@ -99,27 +99,7 @@ function PackingShareView({ payload }: { payload: ListPayload }) {
                   ))}
                 </select>
               </label>
-              <div className="seg" role="radiogroup" aria-label="入れ方">
-                <button type="button" role="radio" aria-checked={mode === 'merge'} className={mode === 'merge' ? 'active' : ''} onClick={() => setMode('merge')}>
-                  ないものだけ追加
-                </button>
-                <button type="button" role="radio" aria-checked={mode === 'replace'} className={mode === 'replace' ? 'active' : ''} onClick={() => setMode('replace')}>
-                  入れ替える
-                </button>
-              </div>
-              <p className="muted small">
-                {mode === 'merge'
-                  ? `「${targetName}」にないもの ${missing ?? 0}個を追加します。今ある持ち物とチェックはそのままです。`
-                  : `「${targetName}」の持ち物を全部消して、このリストの ${list.items.length}個にします。`}
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={toTrip}
-                disabled={!target || (mode === 'merge' && missing === 0)}
-              >
-                {mode === 'merge' ? (missing === 0 ? '追加するものはありません' : '持ち物に追加する') : '入れ替える'}
-              </button>
+              <PutButtons missing={missing} total={list.items.length} disabled={!target} onPut={toTrip} />
             </>
           )}
         </section>

@@ -2357,3 +2357,13 @@ textarea {
   font-size: 14px;
   color: var(--text);
 }
+
+.put-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.put-buttons .muted {
+  margin: 0 0 8px;
+}
