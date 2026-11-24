@@ -36,6 +36,8 @@ export type TripInput = {
   budget: number;
   members: Member[];
   cashOnHand?: number;
+  currency?: string;
+  rate?: number;
 };
 
 /** 入力チェック。問題があればエラーメッセージの配列を返す（空なら OK） */
@@ -46,7 +48,10 @@ export function validateTrip(input: TripInput): string[] {
   else if (input.startDate > input.endDate) errors.push('終了日は開始日以降にしてください');
   if (!Number.isInteger(input.budget) || input.budget < 0) errors.push('予算は0以上の整数（円）にしてください');
   if (input.cashOnHand !== undefined && (!Number.isInteger(input.cashOnHand) || input.cashOnHand < 0)) {
-    errors.push('手持ち現金は0以上の整数（円）にしてください');
+    errors.push('手持ち現金を正しく入れてください');
+  }
+  if (input.currency && input.currency !== 'JPY' && !(input.rate !== undefined && Number.isFinite(input.rate) && input.rate > 0)) {
+    errors.push('為替レート（1現地通貨が何円か）を入れてください');
   }
   if (input.members.length === 0) errors.push('メンバーを1人以上入れてください');
   if (input.members.some((m) => !m.name.trim())) errors.push('メンバーの名前が空です');

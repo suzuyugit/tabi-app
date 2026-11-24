@@ -49,17 +49,34 @@ describe('money', () => {
     ex('3', 1500, 'a', 'cash', '2026-12-02T10:00:00+09:00'),
   ];
   it('グループ全体と自分の負担分', () => {
-    const g = summarize(list, 'group', 'a');
+    const g = summarize(list, 'group', 'a', 'JPY', trip);
     expect(g.total).toBe(40500);
     expect(g.byCategory.get('food')).toBe(10500);
-    const m = summarize(list, 'me', 'a');
+    const m = summarize(list, 'me', 'a', 'JPY', trip);
     expect(m.total).toBe(10000 + 3000 + 500);
   });
   it('予算と比べる額は自分の負担分の合計', () => {
     expect(myTotal(trip, list)).toBe(10000 + 3000 + 500);
   });
   it('現金の残り：自分が現金で払った分だけ減る', () => {
-    expect(cashRemaining(trip, list)).toEqual({ start: 20000, paid: 1500, rest: 18500 });
+    expect(cashRemaining(trip, list)).toEqual({ start: 20000, paid: 1500, rest: 18500, currency: 'JPY' });
     expect(cashRemaining({ ...trip, cashOnHand: undefined }, list)).toBeUndefined();
+  });
+
+  it('海外：円と現地通貨が混ざっていても換算して合計する', () => {
+    const usd: Trip = { ...trip, currency: 'USD', rate: 150, cashOnHand: 20000 }; // 手持ち $200
+    const mixed: Expense[] = [
+      { ...ex('1', 3000, 'a', 'cash', '2026-12-01T12:00:00+09:00'), currency: 'USD' }, // $30（現地の現金）
+      { ...ex('2', 45000, 'b', 'card', '2026-12-01T15:00:00+09:00', 'hotel') }, // 45,000円（日本で予約）
+      { ...ex('3', 1500, 'a', 'cash', '2026-12-01T09:00:00+09:00') }, // 1,500円の現金（日本の空港）
+    ];
+    // 円で見る：$30 = 4,500円
+    expect(summarize(mixed, 'group', 'a', 'JPY', usd).total).toBe(4500 + 45000 + 1500);
+    // ドルで見る（セント）：45,000円 = $300、1,500円 = $10
+    expect(summarize(mixed, 'group', 'a', 'USD', usd).total).toBe(3000 + 30000 + 1000);
+    // 自分の負担（円）：$10 → 1,500円、15,000円、500円
+    expect(myTotal(usd, mixed)).toBe(1500 + 15000 + 500);
+    // 現金の残りは現地通貨の現金だけ減る：$200 − $30
+    expect(cashRemaining(usd, mixed)).toEqual({ start: 20000, paid: 3000, rest: 17000, currency: 'USD' });
   });
 });

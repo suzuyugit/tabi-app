@@ -5,8 +5,9 @@ import type { Expense, PaymentMethod, Trip } from '../db/types';
 import { deleteExpense, lastPaymentMethod, saveExpense, type ExpenseInput } from '../db/expenseRepo';
 import { inputToIso, isoToInput, nowIso } from '../lib/datetime';
 import { byOrder, nearestItem, tripDays } from '../lib/itinerary';
-import { formatMd, formatYen } from '../lib/date';
-import { parseYenInput } from '../lib/trips';
+import { formatMd } from '../lib/date';
+import { convert, currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
+import { expenseCurrency } from '../lib/money';
 import { PAYMENT_LABEL, PAYMENT_METHODS, sharesOf, validateExpense } from '../lib/split';
 import { Sheet } from './Sheet';
 import { showToast } from './Toast';
@@ -16,14 +17,18 @@ type Props = { trip: Trip; expense?: Expense; onClose: () => void };
 /** 支出のクイック入力（編集にも使う）。最短で「金額 → カテゴリ → 保存」 */
 export function ExpenseSheet({ trip, expense, onClose }: Props) {
   const me = trip.members.find((m) => m.isMe) ?? trip.members[0];
-  const [amount, setAmount] = useState(expense ? String(expense.amount) : '');
+  const local = tripCurrency(trip);
+  const foreign = isForeign(trip);
+  // 海外では最初は現地通貨。日本で払った分などは「円」に切り替える
+  const [currency, setCurrency] = useState(expense ? expenseCurrency(expense) : local);
+  const [amount, setAmount] = useState(expense ? toInputValue(expense.amount, expenseCurrency(expense)) : '');
   const [categoryId, setCategoryId] = useState(expense?.categoryId ?? '');
   const [paidBy, setPaidBy] = useState(expense?.paidBy ?? me.id);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(expense?.paymentMethod ?? lastPaymentMethod());
   const [splitAmong, setSplitAmong] = useState<string[]>(expense?.splitAmong ?? trip.members.map((m) => m.id));
   const [splitMode, setSplitMode] = useState(expense?.splitMode ?? 'equal');
   const [custom, setCustom] = useState<Record<string, string>>(() =>
-    Object.fromEntries(Object.entries(expense?.customShares ?? {}).map(([k, v]) => [k, String(v)])),
+    Object.fromEntries(Object.entries(expense?.customShares ?? {}).map(([k, v]) => [k, toInputValue(v, expenseCurrency(expense!))])),
   );
   const [itemId, setItemId] = useState(expense?.itemId ?? '');
   const [memo, setMemo] = useState(expense?.memo ?? '');
@@ -45,11 +50,14 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
   // 今の時刻にいちばん近い今日の予定（自動ではひも付けない）
   const suggestion = useMemo(() => (expense || !items ? undefined : nearestItem(items, new Date())), [expense, items]);
 
-  const amountNum = parseYenInput(amount);
+  const amountNum = parseMoneyInput(amount, currency);
+  const amountOk = amountNum !== undefined && !Number.isNaN(amountNum);
+  const fmt = (minor: number) => formatMoney(minor, currency);
+  const cinfo = currencyInfo(currency);
   const dayLabel = useMemo(() => new Map(tripDays(trip).map((d) => [d.date, d.label])), [trip]);
   const nameOf = (id: string) => trip.members.find((m) => m.id === id)?.name ?? '?';
 
-  const customShares = Object.fromEntries(splitAmong.map((id) => [id, parseYenInput(custom[id] ?? '') ?? 0]));
+  const customShares = Object.fromEntries(splitAmong.map((id) => [id, parseMoneyInput(custom[id] ?? '', currency) ?? 0]));
   const customSum = Object.values(customShares).reduce((a, b) => (Number.isNaN(b) ? a : a + b), 0);
 
   const toggleSplit = (id: string) =>
@@ -57,14 +65,15 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
 
   /** 均等に割った額を個別の欄に入れる（金額を指定に切り替えたとき） */
   const fillEqual = () => {
-    if (!amountNum || Number.isNaN(amountNum)) return setCustom({});
+    if (!amountOk || !amountNum) return setCustom({});
     const shares = sharesOf({ amount: amountNum, paidBy, splitAmong, splitMode: 'equal' });
-    setCustom(Object.fromEntries(splitAmong.map((id) => [id, String(shares[id] ?? 0)])));
+    setCustom(Object.fromEntries(splitAmong.map((id) => [id, toInputValue(shares[id] ?? 0, currency)])));
   };
 
   const save = async () => {
     const input: ExpenseInput = {
-      amount: amountNum !== undefined && !Number.isNaN(amountNum) ? amountNum : 0,
+      amount: amountOk ? amountNum : 0,
+      currency: currency === JPY ? undefined : currency,
       categoryId,
       paymentMethod,
       memo: memo.trim() || undefined,
@@ -78,7 +87,7 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
     const err = validateExpense(input, trip.members.map((m) => m.id));
     if (err) return setError(err);
     await saveExpense(trip.id, input, expense?.id);
-    showToast(`${expense ? '保存' : '記録'}しました ${formatYen(input.amount)}`);
+    showToast(`${expense ? '保存' : '記録'}しました ${fmt(input.amount)}`);
     onClose();
   };
 
@@ -90,10 +99,10 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
   };
 
   const equalPreview = (() => {
-    if (!amountNum || Number.isNaN(amountNum) || splitAmong.length === 0) return '';
+    if (!amountOk || !amountNum || splitAmong.length === 0) return '';
     const base = Math.floor(amountNum / splitAmong.length);
     const rest = amountNum - base * splitAmong.length;
-    return `1人 ${formatYen(base)}${rest ? `（端数 ${rest}円は${nameOf(paidBy)}）` : ''}`;
+    return `1人 ${fmt(base)}${rest ? `（端数 ${fmt(rest)}は${nameOf(paidBy)}）` : ''}`;
   })();
 
   return (
@@ -114,12 +123,12 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
           </p>
         )}
 
+        <div className="amount-row">
         <label className="amount-field">
-          <span className="yen">¥</span>
+          <span className="yen">{cinfo.symbol.trim()}</span>
           <input
             className="amount-input"
-            inputMode="numeric"
-            pattern="[0-9]*"
+            inputMode={cinfo.decimals > 0 ? 'decimal' : 'numeric'}
             value={amount}
             onChange={(e) => {
               setAmount(e.target.value);
@@ -130,6 +139,30 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
             aria-label="金額"
           />
         </label>
+        {foreign && (
+          <div className="cur-toggle" role="radiogroup" aria-label="通貨">
+            {[local, JPY].map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={c === currency}
+                className={c === currency ? 'active' : ''}
+                // 金額欄からフォーカスを奪わない（キーボードを閉じない）
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => setCurrency(c)}
+              >
+                {c === JPY ? '円' : c}
+              </button>
+            ))}
+          </div>
+        )}
+        </div>
+        {foreign && amountOk && amountNum > 0 && (
+          <div className="converted">
+            ≈ {formatMoney(convert(amountNum, currency, currency === JPY ? local : JPY, trip), currency === JPY ? local : JPY)}
+          </div>
+        )}
 
         <div className="cat-row" role="radiogroup" aria-label="カテゴリ">
           {categories?.map((c) => (
@@ -228,20 +261,17 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
                 <label key={id} className="share-row">
                   <span>{nameOf(id)}</span>
                   <input
-                    inputMode="numeric"
-                    pattern="[0-9]*"
+                    inputMode={cinfo.decimals > 0 ? 'decimal' : 'numeric'}
                     value={custom[id] ?? ''}
                     onChange={(e) => setCustom((c) => ({ ...c, [id]: e.target.value }))}
                     placeholder="0"
                   />
-                  <span className="muted">円</span>
+                  <span className="muted">{currency === JPY ? '円' : currency}</span>
                 </label>
               ))}
-              <div className={`hint ${amountNum && customSum !== amountNum ? 'over' : ''}`}>
-                合計 {formatYen(customSum)} / {formatYen(amountNum && !Number.isNaN(amountNum) ? amountNum : 0)}
-                {amountNum && !Number.isNaN(amountNum) && customSum !== amountNum
-                  ? `（あと ${formatYen(amountNum - customSum)}）`
-                  : ''}
+              <div className={`hint ${amountOk && customSum !== amountNum ? 'over' : ''}`}>
+                合計 {fmt(customSum)} / {fmt(amountOk ? amountNum : 0)}
+                {amountOk && customSum !== amountNum ? `（あと ${fmt(amountNum - customSum)}）` : ''}
                 <button type="button" className="btn-text" onClick={fillEqual}>
                   均等に入れ直す
                 </button>

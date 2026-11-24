@@ -4,7 +4,9 @@ import { db } from '../../db/db';
 import type { ItineraryItem, Trip } from '../../db/types';
 import { deleteItem, reorderItems } from '../../db/itineraryRepo';
 import { byOrder, itemIcon, kindMeta, mapsUrl, routeUrl, tripDays } from '../../lib/itinerary';
-import { formatMd, formatYen, todayYmd } from '../../lib/date';
+import { formatMd, todayYmd } from '../../lib/date';
+import { convert, formatMoney, tripCurrency } from '../../lib/currency';
+import { expenseCurrency } from '../../lib/money';
 import { copyText } from '../../lib/clipboard';
 import { useLongPressReorder } from '../../hooks/useLongPressReorder';
 import { ItemSheet } from '../../components/ItemSheet';
@@ -33,9 +35,13 @@ export function ItineraryTab({ trip }: Props) {
       db.expenses.where('tripId').equals(trip.id).toArray(),
     ]);
     const actual = new Map<string, number>();
-    for (const e of expenses) if (e.itemId) actual.set(e.itemId, (actual.get(e.itemId) ?? 0) + e.amount);
+    // 実際に使った額は現地通貨にそろえる（予想費用と比べるため）
+    const local = tripCurrency(trip);
+    for (const e of expenses) {
+      if (e.itemId) actual.set(e.itemId, (actual.get(e.itemId) ?? 0) + convert(e.amount, expenseCurrency(e), local, trip));
+    }
     return { items, actual };
-  }, [trip.id]);
+  }, [trip]);
 
   const dayDates = new Set(days.map((d) => d.date));
   const outsideItems = (data?.items ?? []).filter((it) => !dayDates.has(it.date));
@@ -89,7 +95,7 @@ export function ItineraryTab({ trip }: Props) {
             className={`item-card ${draggingId === it.id ? 'dragging' : ''}`}
             onClick={() => setEditing({ item: it })}
           >
-            <ItemCardBody item={it} actual={data?.actual.get(it.id)} showDate={current === OUTSIDE} onMenu={() => setMenuFor(it)} />
+            <ItemCardBody item={it} currency={tripCurrency(trip)} actual={data?.actual.get(it.id)} showDate={current === OUTSIDE} onMenu={() => setMenuFor(it)} />
           </li>
         ))}
       </ul>
@@ -143,9 +149,9 @@ export function ItineraryTab({ trip }: Props) {
   );
 }
 
-type CardProps = { item: ItineraryItem; actual?: number; showDate: boolean; onMenu: () => void };
+type CardProps = { item: ItineraryItem; currency: string; actual?: number; showDate: boolean; onMenu: () => void };
 
-function ItemCardBody({ item, actual, showDate, onMenu }: CardProps) {
+function ItemCardBody({ item, currency, actual, showDate, onMenu }: CardProps) {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   const over = actual !== undefined && item.estimatedCost !== undefined && actual > item.estimatedCost;
 
@@ -228,8 +234,8 @@ function ItemCardBody({ item, actual, showDate, onMenu }: CardProps) {
         )}
         {(item.estimatedCost !== undefined || actual !== undefined) && (
           <div className="item-cost">
-            {item.estimatedCost !== undefined && <span className="muted">予想 {formatYen(item.estimatedCost)}</span>}
-            {actual !== undefined && <span className={over ? 'over' : ''}>実際 {formatYen(actual)}</span>}
+            {item.estimatedCost !== undefined && <span className="muted">予想 {formatMoney(item.estimatedCost, currency)}</span>}
+            {actual !== undefined && <span className={over ? 'over' : ''}>実際 {formatMoney(actual, currency)}</span>}
           </div>
         )}
         {item.memo && <div className="item-memo">{item.memo}</div>}

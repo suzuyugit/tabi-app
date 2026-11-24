@@ -3,7 +3,7 @@ import type { ItemKind, ItineraryItem, Transport, Trip } from '../db/types';
 import { createItem, deleteItem, updateItem, type ItemInput } from '../db/itineraryRepo';
 import { fallbackTitle, ITEM_KINDS, normalizeUrl, TRANSPORTS, tripDays } from '../lib/itinerary';
 import { formatMd } from '../lib/date';
-import { parseYenInput } from '../lib/trips';
+import { currencyInfo, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
 import { Sheet } from './Sheet';
 import { showToast } from './Toast';
 
@@ -34,7 +34,8 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   // 移動でタイトルが自動の名前（「飛行機」など）のときは空欄から始める
   const [title, setTitle] = useState(item && !(item.kind === 'move' && item.title === fallbackTitle(item)) ? item.title : '');
   const [places, setPlaces] = useState<string[]>(item?.places?.length ? item.places : ['']);
-  const [cost, setCost] = useState(item?.estimatedCost !== undefined ? String(item.estimatedCost) : '');
+  const local = tripCurrency(trip);
+  const [cost, setCost] = useState(toInputValue(item?.estimatedCost, local));
   const [reservationNo, setReservationNo] = useState(item?.reservationNo ?? '');
   const [checkInTime, setCheckInTime] = useState(item?.checkInTime ?? '');
   const [url, setUrl] = useState(item?.url ?? '');
@@ -52,11 +53,11 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
   const removePlace = (i: number) => setPlaces((ps) => (ps.length === 1 ? [''] : ps.filter((_, j) => j !== i)));
 
   const save = async () => {
-    const costNum = parseYenInput(cost);
+    const costNum = parseMoneyInput(cost, local);
     const move = isMove ? { transport, from: opt(from), to: opt(to), arrivalTime: opt(arrivalTime) } : {};
     const finalTitle = title.trim() || (isMove ? fallbackTitle({ kind, transport }) : '');
     if (!finalTitle) return setError('タイトルを入れてください');
-    if (costNum !== undefined && Number.isNaN(costNum)) return setError('予想費用は数字（円）で入れてください');
+    if (costNum !== undefined && Number.isNaN(costNum)) return setError('予想費用を正しく入れてください');
     const input: ItemInput = {
       kind,
       date,
@@ -228,8 +229,8 @@ export function ItemSheet({ trip, item, defaultDate, onClose }: Props) {
         </div>
 
         <label className="field">
-          <span className="label">予想費用（円）</span>
-          <input inputMode="numeric" pattern="[0-9]*" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="例：500" />
+          <span className="label">予想費用（{local === JPY ? '円' : currencyInfo(local).name}）</span>
+          <input inputMode={currencyInfo(local).decimals > 0 ? 'decimal' : 'numeric'} value={cost} onChange={(e) => setCost(e.target.value)} placeholder="例：500" />
         </label>
 
         {showMore ? (

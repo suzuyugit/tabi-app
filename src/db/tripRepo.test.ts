@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
-import { createTrip, deleteTrip, MemberInUseError, updateTrip } from './tripRepo';
+import { createTrip, CurrencyInUseError, deleteTrip, MemberInUseError, updateTrip } from './tripRepo';
 import type { TripInput } from '../lib/trips';
 
 const input = (): TripInput => ({
@@ -80,5 +80,16 @@ describe('DB', () => {
     expect(await db.itineraryItems.count()).toBe(0);
     expect(await db.settlements.count()).toBe(0);
     expect(await db.packingItems.where('tripId').equals(other).count()).toBe(1);
+  });
+
+  it('現地通貨で記録した支出があると、通貨は変えられない（レートは変えられる）', async () => {
+    const id = await createTrip({ ...input(), currency: 'USD', rate: 150 });
+    await db.expenses.add({
+      id: 'e1', tripId: id, amount: 1250, currency: 'USD', categoryId: 'cat-03-food', paymentMethod: 'cash',
+      datetime: '2026-12-01T12:00:00+09:00', paidBy: 'suzuki', splitAmong: ['suzuki'], splitMode: 'equal',
+    });
+    await expect(updateTrip(id, { ...input(), currency: 'EUR', rate: 160 })).rejects.toBeInstanceOf(CurrencyInUseError);
+    await updateTrip(id, { ...input(), currency: 'USD', rate: 148.5 });
+    expect((await db.trips.get(id))?.rate).toBe(148.5);
   });
 });

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { Member } from '../db/types';
-import { createTrip, deleteTrip, lastMyName, MemberInUseError, membersInUse, updateTrip } from '../db/tripRepo';
+import { createTrip, CurrencyInUseError, deleteTrip, lastMyName, MemberInUseError, membersInUse, updateTrip } from '../db/tripRepo';
+import { CURRENCIES, currencyInfo, formatMoney, JPY, parseMoneyInput, parseRate, toInputValue } from '../lib/currency';
 import { newId } from '../lib/id';
 import { formatRange, todayYmd } from '../lib/date';
 import { parseYenInput, validateTrip, type TripInput } from '../lib/trips';
@@ -19,6 +20,9 @@ export function TripFormScreen({ tripId }: Props) {
   const [endDate, setEndDate] = useState(todayYmd());
   const [budget, setBudget] = useState('');
   const [cash, setCash] = useState('');
+  const [currency, setCurrency] = useState(JPY);
+  const [rate, setRate] = useState('');
+  const [savedCurrency, setSavedCurrency] = useState(JPY);
   const [members, setMembers] = useState<Member[]>([{ id: newId(), name: '自分', isMe: true }]);
   const [copyFrom, setCopyFrom] = useState('');
   const [inUse, setInUse] = useState<Set<string>>(new Set());
@@ -42,7 +46,10 @@ export function TripFormScreen({ tripId }: Props) {
         setStartDate(t.startDate);
         setEndDate(t.endDate);
         setBudget(t.budget ? String(t.budget) : '');
-        setCash(t.cashOnHand !== undefined ? String(t.cashOnHand) : '');
+        setCash(toInputValue(t.cashOnHand, t.currency));
+        setCurrency(t.currency ?? JPY);
+        setSavedCurrency(t.currency ?? JPY);
+        setRate(t.rate !== undefined ? String(t.rate) : '');
         setMembers(t.members);
         setInUse(await membersInUse(t.id));
         if (!cancelled) setLoaded(true);
@@ -108,7 +115,8 @@ export function TripFormScreen({ tripId }: Props) {
   const onSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     const budgetNum = parseYenInput(budget);
-    const cashNum = parseYenInput(cash);
+    const cashNum = parseMoneyInput(cash, currency);
+    const rateNum = currency === JPY ? undefined : parseRate(rate);
     const input: TripInput = {
       name: name.trim(),
       startDate,
@@ -116,6 +124,8 @@ export function TripFormScreen({ tripId }: Props) {
       budget: budgetNum ?? 0,
       members: members.map((m) => ({ ...m, name: m.name.trim() })),
       cashOnHand: cashNum,
+      currency: currency === JPY ? undefined : currency,
+      rate: rateNum,
     };
     const errs = validateTrip(input);
     setErrors(errs);
@@ -133,7 +143,9 @@ export function TripFormScreen({ tripId }: Props) {
         navigate({ name: 'trip', tripId: id, tab: 'itinerary' }, { replace: true });
       }
     } catch (e) {
-      setErrors([e instanceof MemberInUseError ? e.message : `保存できませんでした：${String(e)}`]);
+      setErrors([
+        e instanceof MemberInUseError || e instanceof CurrencyInUseError ? e.message : `保存できませんでした：${String(e)}`,
+      ]);
       setSaving(false);
     }
   };
@@ -235,9 +247,45 @@ export function TripFormScreen({ tripId }: Props) {
           />
         </label>
 
+        <fieldset className="field">
+          <legend className="label">現地通貨（海外旅行のとき）</legend>
+          <select value={currency} onChange={(e) => setCurrency(e.target.value)} aria-label="現地通貨">
+            {CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code === JPY ? '日本円（国内旅行）' : `${c.name}（${c.code}）`}
+              </option>
+            ))}
+          </select>
+          {currency !== JPY && (
+            <div className="rate-row">
+              <span>1 {currency} =</span>
+              <input
+                inputMode="decimal"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+                placeholder="例：150.25"
+                aria-label="為替レート"
+              />
+              <span>円</span>
+            </div>
+          )}
+          {currency !== JPY && <RateHint currency={currency} rate={rate} />}
+          {isEdit && currency !== savedCurrency && (
+            <span className="hint">予定の予想費用と手持ち現金は、新しい通貨の金額として扱われます。</span>
+          )}
+        </fieldset>
+
         <label className="field">
-          <span className="label">出発時の自分の手持ち現金（円・任意）</span>
-          <input inputMode="numeric" pattern="[0-9]*" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="例：20000" />
+          <span className="label">
+            出発時の自分の手持ち現金（{currency === JPY ? '円' : currencyInfo(currency).name}・任意）
+          </span>
+          <input
+            inputMode={currencyInfo(currency).decimals > 0 ? 'decimal' : 'numeric'}
+            value={cash}
+            onChange={(e) => setCash(e.target.value)}
+            placeholder={currency === JPY ? '例：20000' : '例：300'}
+            aria-label="手持ち現金"
+          />
         </label>
 
         {!isEdit && copySources && copySources.length > 0 && (
@@ -266,5 +314,22 @@ export function TripFormScreen({ tripId }: Props) {
         )}
       </form>
     </div>
+  );
+}
+
+/** レートの確かめ用：「$10 ≈ 1,503円」「10,000円 ≈ $66.55」 */
+function RateHint({ currency, rate }: { currency: string; rate: string }) {
+  const r = parseRate(rate);
+  if (r === undefined) return <span className="hint">両替所やカードのレートを見て入れてください。あとから変更できます。</span>;
+  if (Number.isNaN(r)) return <span className="hint over">レートは数字で入れてください</span>;
+  const c = currencyInfo(currency);
+  // 現地の「よくある金額」を例に出す（ウォンやドンは桁が大きい）
+  const sample = (r < 1 ? 10000 : 10) * 10 ** c.decimals;
+  const yen = Math.round((sample / 10 ** c.decimals) * r);
+  const back = Math.round((10000 / r) * 10 ** c.decimals);
+  return (
+    <span className="hint">
+      {formatMoney(sample, currency)} ≈ {formatMoney(yen)}　／　{formatMoney(10000)} ≈ {formatMoney(back, currency)}
+    </span>
   );
 }

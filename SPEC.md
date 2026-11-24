@@ -24,11 +24,11 @@ React + TypeScript + Vite で作り、IndexedDB に保存して、GitHub Pages �
 | 公開 | GitHub Pages | 無料 |
 | バックアップ | JSONの書き出し・読み込み | 機種変更やブラウザのデータ消去に備える |
 
-スマホの縦画面で使うことを前提にする（幅 360〜430px）。通貨は円だけ。
+スマホの縦画面で使うことを前提にする（幅 360〜430px）。通貨は円が基本で、海外旅行では旅行ごとに現地通貨と為替レートを設定できる（下の「通貨」）。
 
 ## データ設計
 
-テーブルは6つ（Trip・ItineraryItem・Expense・PackingItem・Category・Settlement）。金額はすべて整数（円）、日時は ISO 文字列で持つ。
+テーブルは6つ（Trip・ItineraryItem・Expense・PackingItem・Category・Settlement）。金額はすべてその通貨の最小単位の整数（円なら円、ドルならセント）、日時は ISO 文字列で持つ。
 
 ```ts
 type Member = { id: string; name: string; isMe: boolean };
@@ -40,7 +40,9 @@ type Trip = {
   endDate: string;
   budget: number;         // 予算（円）。自分の分だけ
   members: Member[];      // 自分＋友人
-  cashOnHand?: number;    // 出発時の自分の手持ち現金
+  cashOnHand?: number;    // 出発時の自分の手持ち現金（現地通貨）
+  currency?: string;      // 現地通貨（ISO コード。未設定なら円）
+  rate?: number;          // 1現地通貨 = rate 円（海外のときだけ）
   createdAt: string;
 };
 
@@ -72,7 +74,8 @@ type PaymentMethod = 'cash' | 'card' | 'paypay' | 'other';
 type Expense = {
   id: string;
   tripId: string;
-  amount: number;
+  amount: number;         // currency の最小単位
+  currency?: string;      // 支払った通貨（現地通貨か円）。未設定なら円
   categoryId: string;
   paymentMethod: PaymentMethod; // 初期値：前回使ったもの
   memo?: string;
@@ -94,6 +97,15 @@ type Settlement = { tripId: string; from: string; to: string; amount: number; do
 - カテゴリの初期値：交通、宿、食事、カフェ・おやつ、観光、お土産、その他
 - `Settlement` は精算表の「済み」チェックを保存するためだけに使う。金額はその都度計算し直し、支出が変わったらチェックは外す
 - メンバーを削除するとき、その人が関わる支出があれば削除できないようにする
+
+## 通貨
+
+- 旅行の作成・編集で「現地通貨」を選ぶ（国内旅行は日本円のまま）。海外なら「1 USD = 150 円」のようにレートを手入力する（電波がなくても使えるように、自動取得はしない）
+- 支出は1件ごとに「現地通貨」か「円」を選んで記録する（初期値は現地通貨。日本で払った航空券などは円）。入力中は換算した額も出す
+- お金タブは「現地通貨で見る／円で見る」を切り替えられる。換算はその旅行のレート1つで行う
+- 予算（自分の分）は円で持ち、現地通貨で見るときは換算して比べる
+- 手持ち現金と予定の予想費用は現地通貨。現金の残りは、現地通貨の現金払いだけを引く
+- 現地通貨で記録した支出があるときは、現地通貨を変更できない（レートは変更できる）
 
 ## 画面構成と各画面の仕様
 

@@ -2,37 +2,53 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { Category, Expense, Trip } from '../../db/types';
-import { cashRemaining, summarize, valueOf, type ViewMode } from '../../lib/money';
+import { cashRemaining, expenseCurrency, summarize, valueIn, type ViewMode } from '../../lib/money';
+import { convert, formatMoney, isForeign, JPY, tripCurrency } from '../../lib/currency';
 import { isoDate, isoTime } from '../../lib/datetime';
-import { formatMd, formatYen } from '../../lib/date';
+import { formatMd } from '../../lib/date';
 import { tripDays } from '../../lib/itinerary';
 import { PAYMENT_LABEL } from '../../lib/split';
 
 const VIEW_KEY = 'tabi.moneyView';
+const CUR_KEY = 'tabi.moneyCurrency';
 
-function loadView(): ViewMode {
+function load(key: string): string | null {
   try {
-    return localStorage.getItem(VIEW_KEY) === 'group' ? 'group' : 'me';
+    return localStorage.getItem(key);
   } catch {
-    return 'me';
+    return null;
+  }
+}
+
+function save(key: string, v: string) {
+  try {
+    localStorage.setItem(key, v);
+  } catch {
+    // 覚えられなくてもよい
   }
 }
 
 type Props = { trip: Trip; onEdit: (e: Expense) => void };
 
 export function MoneyTab({ trip, onEdit }: Props) {
-  const [mode, setModeState] = useState<ViewMode>(loadView);
+  const [mode, setModeState] = useState<ViewMode>(() => (load(VIEW_KEY) === 'group' ? 'group' : 'me'));
+  // 表示する通貨：海外の旅行では「現地通貨」と「円」を切り替えられる（最初は現地通貨）
+  const [showYen, setShowYenState] = useState(() => load(CUR_KEY) === 'JPY');
   const [dayFilter, setDayFilter] = useState('');
   const [catFilter, setCatFilter] = useState('');
   const meId = trip.members.find((m) => m.isMe)?.id ?? '';
+  const local = tripCurrency(trip);
+  const foreign = isForeign(trip);
+  const display = foreign && !showYen ? local : JPY;
+  const fmt = (minor: number) => formatMoney(minor, display);
 
   const setMode = (m: ViewMode) => {
     setModeState(m);
-    try {
-      localStorage.setItem(VIEW_KEY, m);
-    } catch {
-      // 覚えられなくてもよい
-    }
+    save(VIEW_KEY, m);
+  };
+  const setShowYen = (v: boolean) => {
+    setShowYenState(v);
+    save(CUR_KEY, v ? JPY : 'local');
   };
 
   const data = useLiveQuery(async () => {
@@ -45,11 +61,14 @@ export function MoneyTab({ trip, onEdit }: Props) {
     return { expenses, categories: new Map(categories.map((c) => [c.id, c])), items: new Map(items.map((i) => [i.id, i])) };
   }, [trip.id]);
 
-  const summary = useMemo(() => (data ? summarize(data.expenses, mode, meId) : undefined), [data, mode, meId]);
+  const summary = useMemo(
+    () => (data ? summarize(data.expenses, mode, meId, display, trip) : undefined),
+    [data, mode, meId, display, trip],
+  );
   if (!data || !summary) return null;
 
-  // 予算は自分の分だけ。グループ全体の表示では予算と比べない
-  const budget = mode === 'me' ? trip.budget : 0;
+  // 予算は自分の分（円で持っている）。グループ全体の表示では予算と比べない
+  const budget = mode === 'me' && trip.budget > 0 ? convert(trip.budget, JPY, display, trip) : 0;
   const over = budget > 0 && summary.total > budget;
   const cash = cashRemaining(trip, data.expenses);
 
@@ -73,7 +92,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const filtered = data.expenses.filter(
     (e) => (!dayFilter || isoDate(e.datetime) === dayFilter) && (!catFilter || e.categoryId === catFilter),
   );
-  const filteredTotal = filtered.reduce((a, e) => a + valueOf(e, mode, meId), 0);
+  const filteredTotal = filtered.reduce((a, e) => a + valueIn(e, mode, meId, display, trip), 0);
   const nameOf = (id: string) => trip.members.find((m) => m.id === id)?.name ?? '?';
   const usedCats = [...new Set(data.expenses.map((e) => e.categoryId))]
     .map((id) => data.categories.get(id))
@@ -81,28 +100,47 @@ export function MoneyTab({ trip, onEdit }: Props) {
 
   return (
     <div className="money">
-      <div className="seg" role="tablist" aria-label="表示">
-        <button role="tab" aria-selected={mode === 'me'} className={mode === 'me' ? 'active' : ''} onClick={() => setMode('me')}>
-          自分の負担分
-        </button>
-        <button role="tab" aria-selected={mode === 'group'} className={mode === 'group' ? 'active' : ''} onClick={() => setMode('group')}>
-          グループ全体
-        </button>
+      <div className="money-toolbar">
+        <div className="seg" role="tablist" aria-label="表示">
+          <button role="tab" aria-selected={mode === 'me'} className={mode === 'me' ? 'active' : ''} onClick={() => setMode('me')}>
+            自分の負担分
+          </button>
+          <button role="tab" aria-selected={mode === 'group'} className={mode === 'group' ? 'active' : ''} onClick={() => setMode('group')}>
+            グループ全体
+          </button>
+        </div>
+        {foreign && (
+          <div className="seg seg-small" role="tablist" aria-label="表示する通貨">
+            <button role="tab" aria-selected={!showYen} className={!showYen ? 'active' : ''} onClick={() => setShowYen(false)}>
+              {local}で見る
+            </button>
+            <button role="tab" aria-selected={showYen} className={showYen ? 'active' : ''} onClick={() => setShowYen(true)}>
+              円で見る
+            </button>
+          </div>
+        )}
       </div>
 
       <section className="card">
         <div className="card-label">{mode === 'group' ? '使った額（グループ全体）' : '自分の負担分'}</div>
         <div className="hero">
-          <span className={`hero-num ${over ? 'over' : ''}`}>{formatYen(summary.total)}</span>
-          {budget > 0 && <span className="muted"> / {formatYen(budget)}</span>}
+          <span className={`hero-num ${over ? 'over' : ''}`}>{fmt(summary.total)}</span>
+          {budget > 0 && <span className="muted"> / {fmt(budget)}</span>}
         </div>
+        {foreign && (
+          <div className="muted small">
+            ≈ {formatMoney(convert(summary.total, display, display === JPY ? local : JPY, trip), display === JPY ? local : JPY)}
+            （1 {local} = {trip.rate}円）
+          </div>
+        )}
         {budget > 0 ? (
           <>
             <div className="bar bar-lg" role="img" aria-label={`予算の${Math.round((summary.total / budget) * 100)}%`}>
               <div className={`bar-fill ${over ? 'over' : ''}`} style={{ width: `${Math.min(summary.total / budget, 1) * 100}%` }} />
             </div>
             <div className={`budget-rest ${over ? 'over' : ''}`}>
-              {over ? `⚠ ${formatYen(summary.total - budget)} オーバー` : `残り ${formatYen(budget - summary.total)}`}
+              {over ? `⚠ ${fmt(summary.total - budget)} オーバー` : `残り ${fmt(budget - summary.total)}`}
+              {display !== JPY && <span className="muted small">（予算 {formatMoney(trip.budget)}）</span>}
             </div>
           </>
         ) : mode === 'me' ? (
@@ -115,12 +153,13 @@ export function MoneyTab({ trip, onEdit }: Props) {
       {cash && (
         <section className="card cash-card">
           <div>
-            <div className="card-label">現金の残り</div>
-            <div className={`cash-num ${cash.rest < 0 ? 'over' : ''}`}>{formatYen(cash.rest)}</div>
+            <div className="card-label">現金の残り{foreign ? `（${cash.currency}）` : ''}</div>
+            <div className={`cash-num ${cash.rest < 0 ? 'over' : ''}`}>{formatMoney(cash.rest, cash.currency)}</div>
+            {foreign && <div className="muted small">≈ {formatMoney(convert(cash.rest, cash.currency, JPY, trip))}</div>}
           </div>
           <div className="muted small right">
-            手持ち {formatYen(cash.start)}
-            <br />− 現金払い {formatYen(cash.paid)}
+            手持ち {formatMoney(cash.start, cash.currency)}
+            <br />− 現金払い {formatMoney(cash.paid, cash.currency)}
           </div>
         </section>
       )}
@@ -132,7 +171,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
         ) : (
           <ul className="hbars">
             {catRows.map((r) => (
-              <li key={r.id} className="hbar-row" title={`${r.cat?.name ?? '?'} ${formatYen(r.value)}`}>
+              <li key={r.id} className="hbar-row" title={`${r.cat?.name ?? '?'} ${fmt(r.value)}`}>
                 <span className="hbar-label">
                   {r.cat?.icon} {r.cat?.name ?? '(削除されたカテゴリ)'}
                 </span>
@@ -140,7 +179,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
                   <span className="hbar-fill" style={{ width: `${(r.value / catMax) * 100}%` }} />
                 </span>
                 <span className="hbar-value">
-                  {formatYen(r.value)}
+                  {fmt(r.value)}
                   <span className="muted pct">{summary.total > 0 ? `${Math.round((r.value / summary.total) * 100)}%` : ''}</span>
                 </span>
               </li>
@@ -160,7 +199,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
               <span className="hbar-track">
                 {r.value > 0 && <span className="hbar-fill" style={{ width: `${(r.value / dayMax) * 100}%` }} />}
               </span>
-              <span className="hbar-value">{formatYen(r.value)}</span>
+              <span className="hbar-value">{fmt(r.value)}</span>
             </li>
           ))}
         </ul>
@@ -188,7 +227,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
         </div>
         {(dayFilter || catFilter) && (
           <p className="muted small">
-            {filtered.length}件・{formatYen(filteredTotal)}
+            {filtered.length}件・{fmt(filteredTotal)}
           </p>
         )}
         {filtered.length === 0 ? (
@@ -198,7 +237,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
             {filtered.map((e) => {
               const cat = data.categories.get(e.categoryId);
               const item = e.itemId ? data.items.get(e.itemId) : undefined;
-              const mine = valueOf(e, 'me', meId);
+              const cur = expenseCurrency(e);
               return (
                 <li key={e.id}>
                   <button className="expense-row" onClick={() => onEdit(e)}>
@@ -212,8 +251,9 @@ export function MoneyTab({ trip, onEdit }: Props) {
                       </span>
                     </span>
                     <span className="expense-amount">
-                      {formatYen(e.amount)}
-                      {mode === 'me' && <span className="expense-mine">自分 {formatYen(mine)}</span>}
+                      {formatMoney(e.amount, cur)}
+                      {cur !== display && <span className="expense-conv">≈ {fmt(convert(e.amount, cur, display, trip))}</span>}
+                      {mode === 'me' && <span className="expense-mine">自分 {fmt(valueIn(e, 'me', meId, display, trip))}</span>}
                     </span>
                   </button>
                 </li>

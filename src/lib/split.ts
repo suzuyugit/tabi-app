@@ -1,4 +1,5 @@
 import type { Expense, PaymentMethod } from '../db/types';
+import { formatMoney } from './currency';
 
 export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   cash: '現金',
@@ -8,7 +9,7 @@ export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
 };
 export const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'card', 'paypay', 'other'];
 
-type SplitPart = Pick<Expense, 'amount' | 'paidBy' | 'splitAmong' | 'splitMode' | 'customShares'>;
+type SplitPart = Pick<Expense, 'amount' | 'paidBy' | 'splitAmong' | 'splitMode' | 'customShares'> & { currency?: string };
 
 /**
  * 支出1件について、各メンバーが負担する額。合計は必ず amount になる。
@@ -44,9 +45,9 @@ export function validateExpense(e: SplitPart & { categoryId: string }, memberIds
   if (e.splitAmong.some((id) => !memberIds.includes(id))) return '割る人にメンバー以外が入っています';
   if (e.splitMode === 'custom') {
     const values = e.splitAmong.map((id) => e.customShares?.[id] ?? 0);
-    if (values.some((v) => !Number.isInteger(v) || v < 0)) return '負担額は0以上の整数（円）にしてください';
+    if (values.some((v) => !Number.isInteger(v) || v < 0)) return '負担額を正しく入れてください';
     const sum = values.reduce((a, b) => a + b, 0);
-    if (sum !== e.amount) return `負担額の合計（${sum.toLocaleString()}円）が金額と合っていません`;
+    if (sum !== e.amount) return `負担額の合計（${formatMoney(sum, e.currency)}）が金額と合っていません`;
   }
   return undefined;
 }
