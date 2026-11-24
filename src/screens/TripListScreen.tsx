@@ -30,8 +30,11 @@ export function TripListScreen() {
     <div className="screen">
       <header className="app-header">
         <h1 className="grow">旅行一覧</h1>
-        <button className="btn btn-ghost btn-small" onClick={() => navigate({ name: 'settings' })}>
-          ⚙ 設定
+        <button className="btn btn-ghost btn-small" onClick={() => navigate({ name: 'packingLists' })}>
+          🎒 持ち物リスト
+        </button>
+        <button className="btn btn-ghost btn-small" onClick={() => navigate({ name: 'settings' })} aria-label="設定">
+          ⚙
         </button>
       </header>
 

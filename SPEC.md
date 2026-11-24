@@ -103,7 +103,7 @@ type Expense = {
 type PackingItem = { id: string; tripId: string; name: string; checked: boolean; order: number };
 
 // 名前を付けて保存した持ち物リスト（旅行とは別）
-type PackingList = { id: string; name: string; items: string[]; updatedAt: string };
+type PackingList = { id: string; name: string; items: string[]; updatedAt: string; checked?: string[] }; // checked：リスト単体で使うときのチェック済みの名前
 
 type Category = { id: string; name: string; icon: string; usageCount: number };
 
@@ -184,7 +184,7 @@ type Repayment = { id: string; tripId: string; from: string; to: string; amount:
 
 - チェックリスト。チェックしたものは下へ移動する
 - 「💾 リストとして保存」で、今の持ち物に名前を付けて保存できる（`PackingList`）。「📋 保存したリストから追加」で、ないものだけ追加／入れ替えができる
-- 保存したリストは、設定画面で編集（1行に1つ）・共有・削除でき、旅行を作るときのコピー元にも選べる
+- 保存したリストは、旅行一覧の「🎒 持ち物リスト」から旅行を開かずに見られる。リスト単体でもチェックリストとして使え（チェックの状態も保存）、追加・並び替え・削除・編集（1行に1つ）・共有・「旅行の持ち物に入れる」ができる。旅行を作るときのコピー元にも選べる
 - いちばん下の入力欄で、Enterを押すたびに続けて追加できる
 - 「全部の選択を外す」ボタン（帰りの荷造り用）
 - 長押しでつかんで並び替え。画面下のゴミ箱に離すと削除

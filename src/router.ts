@@ -8,6 +8,8 @@ export const TAB_KEYS: TabKey[] = ['itinerary', 'money', 'settle', 'packing'];
 export type Route =
   | { name: 'list' }
   | { name: 'settings' }
+  | { name: 'packingLists' }
+  | { name: 'packingList'; id: string }
   | { name: 'share'; data: string }
   | { name: 'newTrip' }
   | { name: 'editTrip'; tripId: string }
@@ -20,6 +22,7 @@ export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
   if (parts[0] === 'new') return { name: 'newTrip' };
   if (parts[0] === 'settings') return { name: 'settings' };
+  if (parts[0] === 'lists') return parts[1] ? { name: 'packingList', id: parts[1] } : { name: 'packingLists' };
   if (parts[0] === 'trip' && parts[1]) {
     if (parts[2] === 'edit') return { name: 'editTrip', tripId: parts[1] };
     if (parts[2] === 'summary') return { name: 'summary', tripId: parts[1] };
@@ -35,6 +38,10 @@ export function routeToHash(r: Route): string {
       return '#/';
     case 'settings':
       return '#/settings';
+    case 'packingLists':
+      return '#/lists';
+    case 'packingList':
+      return `#/lists/${encodeURIComponent(r.id)}`;
     case 'share':
       return `#share=${r.data}`;
     case 'newTrip':

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
-import { addPacking, namesFromText, putPackingNames, savePackingList, togglePacking, tripPackingNames, uncheckAll } from './packingRepo';
+import { addListItem, addPacking, namesFromText, putPackingNames, removeListItem, savePackingList, toggleListItem, togglePacking, tripPackingNames, uncheckAll, uncheckList } from './packingRepo';
 import { createTrip } from './tripRepo';
 
 beforeEach(async () => {
@@ -46,5 +46,21 @@ describe('持ち物リスト', () => {
       `list:${id}`,
     );
     expect(await tripPackingNames(trip)).toEqual(['充電器', '傘']);
+  });
+
+  it('リスト単体でチェックリストとして使える', async () => {
+    const id = await savePackingList('セット', ['充電器', '傘']);
+    await toggleListItem(id, '傘');
+    expect((await db.packingLists.get(id))!.checked).toEqual(['傘']);
+    expect(await addListItem(id, 'カメラ')).toBe(true);
+    expect(await addListItem(id, '傘')).toBe(false);
+    // 編集で傘を残すとチェックも残る。消した持ち物のチェックは消える
+    await savePackingList('セット', ['傘', 'カメラ'], id);
+    expect((await db.packingLists.get(id))!.checked).toEqual(['傘']);
+    await removeListItem(id, '傘');
+    expect((await db.packingLists.get(id))!).toMatchObject({ items: ['カメラ'], checked: [] });
+    await toggleListItem(id, 'カメラ');
+    await uncheckList(id);
+    expect((await db.packingLists.get(id))!.checked).toEqual([]);
   });
 });

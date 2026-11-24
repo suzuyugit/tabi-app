@@ -59,9 +59,9 @@ function PackingShareView({ payload }: { payload: ListPayload }) {
 
   const saveList = async () => {
     if (!listName.trim()) return showToast('リストの名前を入れてください');
-    await savePackingList(listName, list.items);
+    const newId = await savePackingList(listName, list.items);
     showToast(`「${listName.trim()}」を保存しました`);
-    navigate({ name: 'settings' }, { replace: true });
+    navigate({ name: 'packingList', id: newId }, { replace: true });
   };
 
   return (

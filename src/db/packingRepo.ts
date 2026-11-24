@@ -70,8 +70,50 @@ export function namesFromText(text: string): string[] {
 
 export async function savePackingList(name: string, items: string[], id?: string): Promise<string> {
   const listId = id ?? newId();
-  await db.packingLists.put({ id: listId, name: name.trim(), items: [...new Set(items.map((s) => s.trim()).filter(Boolean))], updatedAt: new Date().toISOString() });
+  const clean = [...new Set(items.map((s) => s.trim()).filter(Boolean))];
+  const prev = id ? await db.packingLists.get(id) : undefined;
+  await db.packingLists.put({
+    id: listId,
+    name: name.trim(),
+    items: clean,
+    updatedAt: new Date().toISOString(),
+    // 残っている持ち物のチェックは引き継ぐ
+    checked: (prev?.checked ?? []).filter((n) => clean.includes(n)),
+  });
   return listId;
+}
+
+/** リスト単体のチェックを切り替える */
+export async function toggleListItem(id: string, name: string): Promise<void> {
+  const l = await db.packingLists.get(id);
+  if (!l) return;
+  const checked = new Set(l.checked ?? []);
+  if (checked.has(name)) checked.delete(name);
+  else checked.add(name);
+  await db.packingLists.update(id, { checked: [...checked] });
+}
+
+/** リスト単体に持ち物を足す／消す／チェックを全部外す */
+export async function addListItem(id: string, name: string): Promise<boolean> {
+  const l = await db.packingLists.get(id);
+  const n = name.trim();
+  if (!l || !n || l.items.includes(n)) return false;
+  await db.packingLists.update(id, { items: [...l.items, n], updatedAt: new Date().toISOString() });
+  return true;
+}
+
+export async function removeListItem(id: string, name: string): Promise<void> {
+  const l = await db.packingLists.get(id);
+  if (!l) return;
+  await db.packingLists.update(id, { items: l.items.filter((x) => x !== name), checked: (l.checked ?? []).filter((x) => x !== name) });
+}
+
+export async function uncheckList(id: string): Promise<void> {
+  await db.packingLists.update(id, { checked: [] });
+}
+
+export async function reorderListItems(id: string, items: string[]): Promise<void> {
+  await db.packingLists.update(id, { items });
 }
 
 export async function deletePackingList(id: string): Promise<void> {

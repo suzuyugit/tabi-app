@@ -7,6 +7,7 @@ import { ToastHost } from './components/Toast';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SummaryScreen } from './screens/SummaryScreen';
 import { ShareViewScreen } from './screens/ShareViewScreen';
+import { PackingListScreen, PackingListsScreen } from './screens/PackingListsScreen';
 
 function renderRoute(route: Route) {
   switch (route.name) {
@@ -14,6 +15,10 @@ function renderRoute(route: Route) {
       return <TripListScreen />;
     case 'settings':
       return <SettingsScreen />;
+    case 'packingLists':
+      return <PackingListsScreen />;
+    case 'packingList':
+      return <PackingListScreen key={route.id} id={route.id} />;
     case 'share':
       return <ShareViewScreen data={route.data} />;
     case 'newTrip':

@@ -2367,3 +2367,7 @@ textarea {
 .put-buttons .muted {
   margin: 0 0 8px;
 }
+
+.list-card {
+  border-left-color: var(--primary);
+}
