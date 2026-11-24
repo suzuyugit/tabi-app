@@ -389,7 +389,8 @@ export function MoneyTab({ trip, onEdit }: Props) {
                       <span className="expense-title">{e.memo || cat?.name || '支出'}</span>
                       <span className="expense-sub">
                         {formatMd(isoDate(e.datetime, trip.timeZone))} {isoTime(e.datetime, trip.timeZone)}・{nameOf(e.paidBy)}が{PAYMENT_LABEL[e.paymentMethod]}
-                        {e.splitAmong.length < trip.members.length && `・${e.splitAmong.length}人で割り勘`}
+                        {!(e.splitAmong.length === 1 && e.splitAmong[0] === e.paidBy) &&
+                          (e.splitAmong.length === trip.members.length ? '・全員で割り勘' : `・${e.splitAmong.length}人で割り勘`)}
                         {item && `・📍${item.title}`}
                       </span>
                     </span>

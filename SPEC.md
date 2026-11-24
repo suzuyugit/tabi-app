@@ -89,7 +89,7 @@ type Expense = {
   datetime: string;       // 初期値：今
   itemId?: string;        // ひも付ける予定（任意）
   paidBy: string;         // memberId。初期値：自分
-  splitAmong: string[];   // memberId[]。初期値：全員
+  splitAmong: string[];   // memberId[]。初期値：払った人だけ（＝個人の支出）。割り勘するときだけ人を選ぶ
   splitMode: 'equal' | 'custom';
   customShares?: Record<string, number>; // customのときの各自の負担額
 };
@@ -174,7 +174,7 @@ type Settlement = { tripId: string; from: string; to: string; amount: number; do
 ### 支出クイック入力
 
 - 旅行ごとの画面の右下に、いつも＋ボタンを出す。押すと下からシートが開く
-- 上から順に：金額 → カテゴリ → 払った人 → 割る人 → ひも付ける予定 → メモ → 日時
+- 上から順に：金額 → カテゴリ → 払った人 → 支払い方法 → 割り勘する（オンのときだけ割る人）→ ひも付ける予定 → メモ → 日時
 - 最短で「金額 → カテゴリ → 保存」の3タップで記録できるようにする
 
 ## 割り勘ロジック
@@ -204,7 +204,7 @@ type Settlement = { tripId: string; from: string; to: string; amount: number; do
 | 「今」の時刻が最初から入っている | 新しく入力するとき `datetime` に現在時刻を入れておく。後から直せる |
 | 前の旅行の持ち物リストをコピーできる | 旅行を作るときにコピー元を選ぶ。チェックは全部外した状態でコピーする |
 | 払った人の初期値は自分 | `paidBy` に `isMe` のメンバーを入れておく |
-| 割る人の初期値は全員 | `splitAmong` に全メンバーを入れておく |
+| 基本は割り勘しない | `splitAmong` は払った人だけ（個人の支出）。「割り勘する」をオンにしたときだけ割る人を選ぶ（オンにした時点では全員を選んでおく） |
 | ひも付ける予定の候補 | 今の時刻にいちばん近い今日の予定を候補として出す（自動ではひも付けない） |
 
 ## 共有リンク（サーバーなし）

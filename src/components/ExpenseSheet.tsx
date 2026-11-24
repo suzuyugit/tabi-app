@@ -26,7 +26,12 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
   const [categoryId, setCategoryId] = useState(expense?.categoryId ?? '');
   const [paidBy, setPaidBy] = useState(expense?.paidBy ?? me.id);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(expense?.paymentMethod ?? lastPaymentMethod());
-  const [splitAmong, setSplitAmong] = useState<string[]>(expense?.splitAmong ?? trip.members.map((m) => m.id));
+  // 基本は割り勘しない（払った人の個人の支出）。「割り勘する」をオンにしたときだけ割る人を選ぶ
+  const isPersonal = (e: Expense) => e.splitAmong.length === 1 && e.splitAmong[0] === e.paidBy && e.splitMode === 'equal';
+  const [shared, setShared] = useState(expense ? !isPersonal(expense) : false);
+  const [splitAmong, setSplitAmong] = useState<string[]>(
+    expense && !isPersonal(expense) ? expense.splitAmong : trip.members.map((m) => m.id),
+  );
   const [splitMode, setSplitMode] = useState(expense?.splitMode ?? 'equal');
   const [custom, setCustom] = useState<Record<string, string>>(() =>
     Object.fromEntries(Object.entries(expense?.customShares ?? {}).map(([k, v]) => [k, toInputValue(v, expenseCurrency(expense!))])),
@@ -87,9 +92,10 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
       datetime: inputToIso(datetime, tz) ?? nowIso(tz),
       itemId: itemId || undefined,
       paidBy,
-      splitAmong,
-      splitMode,
-      customShares: splitMode === 'custom' ? customShares : undefined,
+      // 割り勘しないときは「払った人だけで割る」＝個人の支出
+      splitAmong: shared ? splitAmong : [paidBy],
+      splitMode: shared ? splitMode : 'equal',
+      customShares: shared && splitMode === 'custom' ? customShares : undefined,
     };
     const err = validateExpense(input, trip.members.map((m) => m.id));
     if (err) return setError(err);
@@ -226,66 +232,80 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
           </div>
         </div>
 
-        <div className="field">
-          <div className="label-row">
-            <span className="label">割る人</span>
-            <div className="seg seg-small">
-              <button type="button" className={splitMode === 'equal' ? 'active' : ''} onClick={() => setSplitMode('equal')}>
-                均等
-              </button>
-              <button
-                type="button"
-                className={splitMode === 'custom' ? 'active' : ''}
-                onClick={() => {
-                  if (splitMode !== 'custom') fillEqual();
-                  setSplitMode('custom');
-                }}
-              >
-                金額を指定
-              </button>
+        {trip.members.length > 1 && (
+          <div className="field">
+            <div className="label-row">
+              <label className="switch-row">
+                <input type="checkbox" role="switch" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+                <span className="switch" aria-hidden="true" />
+                <span className="label">割り勘する</span>
+              </label>
+              {shared && (
+                <div className="seg seg-small">
+                  <button type="button" className={splitMode === 'equal' ? 'active' : ''} onClick={() => setSplitMode('equal')}>
+                    均等
+                  </button>
+                  <button
+                    type="button"
+                    className={splitMode === 'custom' ? 'active' : ''}
+                    onClick={() => {
+                      if (splitMode !== 'custom') fillEqual();
+                      setSplitMode('custom');
+                    }}
+                  >
+                    金額を指定
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-          <div className="chips">
-            {trip.members.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                role="checkbox"
-                aria-checked={splitAmong.includes(m.id)}
-                className={`pick ${splitAmong.includes(m.id) ? 'active' : ''}`}
-                onClick={() => toggleSplit(m.id)}
-              >
-                {splitAmong.includes(m.id) ? '✓ ' : ''}
-                {m.name}
-              </button>
-            ))}
-          </div>
-          {splitMode === 'equal' ? (
-            equalPreview && <span className="hint">{equalPreview}</span>
-          ) : (
-            <div className="custom-shares">
-              {splitAmong.map((id) => (
-                <label key={id} className="share-row">
-                  <span>{nameOf(id)}</span>
-                  <input
-                    inputMode={cinfo.decimals > 0 ? 'decimal' : 'numeric'}
-                    value={custom[id] ?? ''}
-                    onChange={(e) => setCustom((c) => ({ ...c, [id]: e.target.value }))}
-                    placeholder="0"
-                  />
-                  <span className="muted">{currency === JPY ? '円' : currency}</span>
-                </label>
-              ))}
-              <div className={`hint ${amountOk && customSum !== amountNum ? 'over' : ''}`}>
-                合計 {fmt(customSum)} / {fmt(amountOk ? amountNum : 0)}
-                {amountOk && customSum !== amountNum ? `（あと ${fmt(amountNum - customSum)}）` : ''}
-                <button type="button" className="btn-text" onClick={fillEqual}>
-                  均等に入れ直す
-                </button>
+            {shared ? (
+              <>
+              <div className="chips">
+                {trip.members.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={splitAmong.includes(m.id)}
+                    className={`pick ${splitAmong.includes(m.id) ? 'active' : ''}`}
+                    onClick={() => toggleSplit(m.id)}
+                  >
+                    {splitAmong.includes(m.id) ? '✓ ' : ''}
+                    {m.name}
+                  </button>
+                ))}
               </div>
-            </div>
-          )}
-        </div>
+              {splitMode === 'equal' ? (
+                equalPreview && <span className="hint">{equalPreview}</span>
+              ) : (
+                <div className="custom-shares">
+                  {splitAmong.map((id) => (
+                    <label key={id} className="share-row">
+                      <span>{nameOf(id)}</span>
+                      <input
+                        inputMode={cinfo.decimals > 0 ? 'decimal' : 'numeric'}
+                        value={custom[id] ?? ''}
+                        onChange={(e) => setCustom((c) => ({ ...c, [id]: e.target.value }))}
+                        placeholder="0"
+                      />
+                      <span className="muted">{currency === JPY ? '円' : currency}</span>
+                    </label>
+                  ))}
+                  <div className={`hint ${amountOk && customSum !== amountNum ? 'over' : ''}`}>
+                    合計 {fmt(customSum)} / {fmt(amountOk ? amountNum : 0)}
+                    {amountOk && customSum !== amountNum ? `（あと ${fmt(amountNum - customSum)}）` : ''}
+                    <button type="button" className="btn-text" onClick={fillEqual}>
+                      均等に入れ直す
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
+            ) : (
+              <span className="hint">{nameOf(paidBy)}の個人の支出として記録します</span>
+            )}
+          </div>
+        )}
 
         <div className="field">
           <span className="label">ひも付ける予定</span>
