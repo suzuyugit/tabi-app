@@ -1,6 +1,7 @@
 import { db } from './db';
 import type { Trip } from './types';
 import type { TripPayload } from '../lib/share';
+import { newId } from '../lib/id';
 import { isPersonal } from '../lib/share';
 
 /**
@@ -44,4 +45,31 @@ function newTripFrom(p: TripPayload, meId: string): Trip {
     budget: 0,
     createdAt: new Date().toISOString(),
   } as Trip;
+}
+
+/**
+ * 一緒に行かない人に送られた旅程を保存する（見る用・参考用）。
+ * 同じ旅行がなければ「自分」1人の旅行として作り、あれば予定だけ入れ替える（メンバー・予算などはそのまま）
+ */
+export async function importAsViewer(p: TripPayload, myName: string): Promise<string> {
+  const tripId = p.trip.id;
+  await db.transaction('rw', [db.trips, db.itineraryItems, db.itemKinds], async () => {
+    const current = await db.trips.get(tripId);
+    if (current) {
+      await db.trips.put({ ...current, name: p.trip.name, startDate: p.trip.startDate, endDate: p.trip.endDate });
+    } else {
+      await db.trips.put({
+        ...p.trip,
+        members: [{ id: newId(), name: myName || '自分', isMe: true }],
+        budget: 0,
+        createdAt: new Date().toISOString(),
+      } as Trip);
+    }
+    await db.itineraryItems.where('tripId').equals(tripId).delete();
+    await db.itineraryItems.bulkPut((p.items ?? []).map((it) => ({ ...it, tripId })));
+    for (const k of p.kinds ?? []) {
+      if (!(await db.itemKinds.get(k.id))) await db.itemKinds.add(k);
+    }
+  });
+  return tripId;
 }

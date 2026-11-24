@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { Expense, ItineraryItem, Trip } from '../db/types';
 import { decodePayload, type ListPayload, type TripPayload } from '../lib/share';
-import { importShared } from '../db/shareRepo';
+import { importAsViewer, importShared } from '../db/shareRepo';
 import { lastMyName } from '../db/tripRepo';
 import { countMissingPacking, putPackingNames, savePackingList } from '../db/packingRepo';
 import { formatMd, formatRange } from '../lib/date';
@@ -34,7 +34,8 @@ export function ShareViewScreen({ data }: Props) {
       </div>
     );
   }
-  return payload.kind === 'packing' ? <PackingShareView payload={payload} /> : <TripShareView payload={payload} />;
+  if (payload.kind === 'packing') return <PackingShareView payload={payload} />;
+  return payload.audience === 'others' ? <ViewerShareView payload={payload} /> : <TripShareView payload={payload} />;
 }
 
 /** 持ち物リストだけの共有：旅行の持ち物に入れるか、名前を付けて保存する */
@@ -132,6 +133,52 @@ function PackingShareView({ payload }: { payload: ListPayload }) {
               💾 保存
             </button>
           </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+/** 一緒に行かない人（親・参考にしたい人）に送られた旅程 */
+function ViewerShareView({ payload }: { payload: TripPayload }) {
+  const existing = useLiveQuery(async () => (await db.trips.get(payload.trip.id)) ?? null, [payload]);
+  const myName = useLiveQuery(() => lastMyName());
+  const [busy, setBusy] = useState(false);
+  const trip = { ...payload.trip, budget: 0, createdAt: '' } as Trip;
+
+  const save = async () => {
+    if (existing && !confirm(`このスマホには「${existing.name}」がもうあります。共有された旅程で予定を入れ替えますか？\n（自分で変えた予定は消えます）`)) return;
+    setBusy(true);
+    const id = await importAsViewer(payload, myName ?? '');
+    showToast('保存しました');
+    navigate({ name: 'trip', tripId: id, tab: 'itinerary' }, { replace: true });
+  };
+
+  return (
+    <div className="screen">
+      <header className="app-header">
+        <button className="icon-btn" onClick={() => navigate({ name: 'list' })} aria-label="旅行一覧へ">‹</button>
+        <div className="header-title">
+          <h1>{trip.name}</h1>
+          <div className="sub">共有された旅程（読むだけ）・{formatMd(isoDate(payload.sharedAt))}時点</div>
+        </div>
+      </header>
+      <main className="content money">
+        <section className="card">
+          <div className="muted small">{formatRange(trip.startDate, trip.endDate)}</div>
+        </section>
+        <SharedItinerary trip={trip} items={(payload.items ?? []) as ItineraryItem[]} kinds={payload.kinds} />
+        <section className="card import-card">
+          <h3 className="card-title">自分のスマホに保存</h3>
+          <p className="muted small">
+            {existing
+              ? `保存してある「${existing.name}」の予定を、この旅程に入れ替えます。`
+              : '旅行として保存すると、いつでも見返せます。参考にしたいときは、保存したあと自由に編集できます。'}
+            あとで新しいリンクが届いたら、開いて保存し直すと最新の旅程になります。
+          </p>
+          <button type="button" className="btn btn-primary btn-block" onClick={save} disabled={busy}>
+            {existing ? '入れ替えて保存' : '保存する'}
+          </button>
         </section>
       </main>
     </div>
@@ -244,6 +291,15 @@ function SharedItinerary({ trip, items, kinds }: { trip: Trip; items: ItineraryI
                       </span>
                     )}
                     {it.places?.length > 0 && <span className="muted small">📍 {it.places.join('・')}</span>}
+                    {it.estimatedCost !== undefined && (
+                      <span className="muted small">予想 {formatMoney(it.estimatedCost, it.estimatedCurrency ?? trip.currency)}（1人）</span>
+                    )}
+                    {it.reservationNo && <span className="muted small">予約番号 {it.reservationNo}</span>}
+                    {it.url && (
+                      <a className="item-place" href={it.url} target="_blank" rel="noopener noreferrer">
+                        予約ページ ↗
+                      </a>
+                    )}
                     {it.memo && <span className="muted small">{it.memo}</span>}
                   </span>
                 </li>

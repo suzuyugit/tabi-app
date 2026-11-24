@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildListPayload, buildPayload, decodePayload, encodePayload, parsePayload, shareUrl, type TripPayload } from './share';
 import { db } from '../db/db';
-import { importShared } from '../db/shareRepo';
+import { importAsViewer, importShared } from '../db/shareRepo';
 import { settlementForTrip } from './settlement';
 import type { Expense, ItineraryItem, Trip } from '../db/types';
 
@@ -78,5 +78,27 @@ describe('共有リンク', () => {
     expect(decodePayload(encodePayload(p))).toEqual(p);
     const old = parsePayload({ v: 1, kind: 'packing', sharedAt: 'x', trip: { name: '京都' }, packing: [{ name: '傘' }] });
     expect(old).toEqual({ v: 1, kind: 'packing', sharedAt: 'x', list: { name: '京都の持ち物', items: ['傘'] } });
+  });
+
+  it('ほかの人に見せる旅程：メンバー・予約情報は入れず、選んだものだけ。保存は「自分」1人の旅行', async () => {
+    const withInfo = [{ ...items[0], reservationNo: 'ABC123', url: 'https://x', estimatedCost: 500, memo: '朝早めに' }, items[1]];
+    const p = buildPayload('itinerary', trip, { ...data, items: withInfo }, undefined, { reservations: false, costs: true, memos: false });
+    expect(p.audience).toBe('others');
+    expect(p.trip.members).toEqual([]);
+    expect(p.trip).not.toHaveProperty('budget');
+    expect(p.items![0]).not.toHaveProperty('reservationNo');
+    expect(p.items![0]).not.toHaveProperty('url');
+    expect(p.items![0]).not.toHaveProperty('memo');
+    expect(p.items![0].estimatedCost).toBe(500);
+    expect(decodePayload(encodePayload(p))).toEqual(p);
+
+    await importAsViewer(p, '母');
+    const t = (await db.trips.get('trip-1'))!;
+    expect(t.members.map((m) => [m.name, m.isMe])).toEqual([['母', true]]);
+    expect(await db.itineraryItems.count()).toBe(2);
+    // 新しいリンクで保存し直すと、予定だけ入れ替わる
+    await importAsViewer({ ...p, items: p.items!.slice(0, 1) }, '母');
+    expect(await db.itineraryItems.count()).toBe(1);
+    expect((await db.trips.get('trip-1'))!.members[0].name).toBe('母');
   });
 });

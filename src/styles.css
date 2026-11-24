@@ -2350,3 +2350,10 @@ textarea {
   gap: 8px;
   margin-bottom: 12px;
 }
+
+.share-opt {
+  display: flex;
+  min-height: 36px;
+  font-size: 14px;
+  color: var(--text);
+}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { Trip } from '../db/types';
-import { buildListPayload, buildPayload, isPersonal, packingNames, type ShareKind } from '../lib/share';
+import { buildListPayload, buildPayload, isPersonal, packingNames, type OthersOptions, type ShareKind } from '../lib/share';
 import { ShareButtons } from './ShareButtons';
 import { Sheet } from './Sheet';
 
@@ -12,6 +12,9 @@ type Props = { trip: Trip; onClose: () => void };
 export function ShareSheet({ trip, onClose }: Props) {
   const [kind, setKind] = useState<ShareKind>('itinerary');
   const [listName, setListName] = useState(`${trip.name}の持ち物`);
+  // 旅程を見せる相手：一緒に行く人 / ほかの人（親・参考にしたい人）
+  const [toOthers, setToOthers] = useState(false);
+  const [others, setOthers] = useState<OthersOptions>({ reservations: false, costs: true, memos: true });
   const data = useLiveQuery(async () => {
     const [items, kinds, expenses, categories, repayments, packing] = await Promise.all([
       db.itineraryItems.where('tripId').equals(trip.id).toArray(),
@@ -27,8 +30,10 @@ export function ShareSheet({ trip, onClose }: Props) {
   if (!data) return null;
   // 持ち物は旅行の情報を入れず、リストだけを送る
   const payload =
-    kind === 'packing' ? buildListPayload(listName.trim() || `${trip.name}の持ち物`, packingNames(data.packing)) : buildPayload(kind, trip, data);
-  const fileBase = `${kind}-${trip.startDate.replace(/-/g, '')}`;
+    kind === 'packing'
+      ? buildListPayload(listName.trim() || `${trip.name}の持ち物`, packingNames(data.packing))
+      : buildPayload(kind, trip, data, undefined, kind === 'itinerary' && toOthers ? others : undefined);
+  const fileBase = `${kind}${kind === 'itinerary' && toOthers ? '-view' : ''}-${trip.startDate.replace(/-/g, '')}`;
   const title = `${trip.name}の${{ itinerary: '旅程', settle: '割り勘', packing: '持ち物' }[kind]}`;
   const sharedCount = data.expenses.filter((e) => !isPersonal(e)).length;
 
@@ -58,6 +63,41 @@ export function ShareSheet({ trip, onClose }: Props) {
             <p className="muted small">受け取った人は、自分の好きな旅行の持ち物に入れたり、リストとして保存したりできます。</p>
           </div>
         ) : (
+        <>
+        {kind === 'itinerary' && (
+          <div className="seg" role="radiogroup" aria-label="見せる相手">
+            <button type="button" role="radio" aria-checked={!toOthers} className={!toOthers ? 'active' : ''} onClick={() => setToOthers(false)}>
+              一緒に行く人に
+            </button>
+            <button type="button" role="radio" aria-checked={toOthers} className={toOthers ? 'active' : ''} onClick={() => setToOthers(true)}>
+              ほかの人に見せる
+            </button>
+          </div>
+        )}
+        {kind === 'itinerary' && toOthers ? (
+          <div className="card share-contents">
+            <p className="muted small">親に予定を知らせたり、旅程を参考にしてもらったりするときに。受け取った人は読むだけで見られ、自分のスマホに保存もできます。</p>
+            <div className="card-label">送るもの</div>
+            <ul>
+              <li>旅行名・日程・予定 {data.items.length}件</li>
+            </ul>
+            <div className="card-label">一緒に送るか選ぶ</div>
+            {(
+              [
+                ['costs', '予想費用'],
+                ['memos', 'メモ'],
+                ['reservations', '予約番号・予約ページ'],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="mini-check share-opt">
+                <input type="checkbox" checked={others[key]} onChange={(e) => setOthers((o) => ({ ...o, [key]: e.target.checked }))} />
+                {label}
+              </label>
+            ))}
+            <div className="card-label">送らないもの</div>
+            <p className="muted small">メンバーの名前・予算・支出・持ち物{others.reservations ? '' : '・予約番号・予約ページ'}</p>
+          </div>
+        ) : (
         <div className="card share-contents">
           <div className="card-label">送るもの</div>
           <ul>
@@ -74,6 +114,8 @@ export function ShareSheet({ trip, onClose }: Props) {
           <div className="card-label">送らないもの</div>
           <p className="muted small">予算・手持ち現金・個人の支出・持ち物</p>
         </div>
+        )}
+        </>
         )}
 
         <ShareButtons payload={payload} title={title} fileBase={fileBase} />

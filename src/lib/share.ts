@@ -16,6 +16,8 @@ export type TripPayload = {
   v: 1;
   kind: 'itinerary' | 'settle';
   sharedAt: string;
+  /** 'others' = 一緒に行かない人（親・参考にしたい人）に見せる旅程。メンバーは入れない */
+  audience?: 'others';
   trip: SharedTrip;
   items?: Omit<ItineraryItem, 'tripId'>[];
   kinds?: ItemKindDef[];
@@ -45,11 +47,15 @@ export function isPersonal(e: Pick<Expense, 'paidBy' | 'splitAmong'>): boolean {
 
 const strip = <T extends { tripId: string }>({ tripId: _t, ...rest }: T): Omit<T, 'tripId'> => rest;
 
+/** ほかの人に見せる旅程で、何を入れるか */
+export type OthersOptions = { reservations: boolean; costs: boolean; memos: boolean };
+
 export function buildPayload(
   kind: TripPayload['kind'],
   trip: Trip,
   data: { items: ItineraryItem[]; kinds: ItemKindDef[]; expenses: Expense[]; categories: Category[]; repayments: Repayment[] },
   now = new Date().toISOString(),
+  others?: OthersOptions,
 ): TripPayload {
   const t: SharedTrip = {
     id: trip.id,
@@ -63,6 +69,37 @@ export function buildPayload(
     settleCurrency: trip.settleCurrency,
     settleRound: trip.settleRound,
   };
+  if (kind === 'itinerary' && others) {
+    // 一緒に行かない人に見せる：メンバーの名前は入れず、予約情報・費用・メモは選んだものだけ
+    const used = new Set(data.items.map((i) => i.kind));
+    return {
+      v: 1,
+      kind,
+      sharedAt: now,
+      audience: 'others',
+      trip: { id: t.id, name: t.name, startDate: t.startDate, endDate: t.endDate, members: [], currency: t.currency, rate: t.rate, timeZone: t.timeZone },
+      items: data.items.map((it) => {
+        const {
+          tripId: _t,
+          reservationNo,
+          url,
+          checkInTime,
+          estimatedCost,
+          estimatedCurrency,
+          memo,
+          pinnedPos: _p,
+          ...rest
+        } = it;
+        return {
+          ...rest,
+          ...(others.reservations ? { reservationNo, url, checkInTime } : {}),
+          ...(others.costs ? { estimatedCost, estimatedCurrency } : {}),
+          ...(others.memos ? { memo } : {}),
+        };
+      }),
+      kinds: data.kinds.filter((k) => used.has(k.id)),
+    };
+  }
   if (kind === 'itinerary') {
     const used = new Set(data.items.map((i) => i.kind));
     return {
