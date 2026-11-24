@@ -71,15 +71,23 @@ export function calcSettlement(expenses: SplitExpense[], members: Pick<Member, '
   return { balances, transfers: transfersFrom(balances) };
 }
 
+/** 精算する通貨（円か、その旅行の現地通貨） */
+export function settleCurrencyOf(trip: Pick<Trip, 'currency' | 'settleCurrency'>): string {
+  const local = trip.currency ?? JPY;
+  return trip.settleCurrency === local ? local : JPY;
+}
+
 /**
- * 旅行の精算表（円）。円と現地通貨が混ざっていても、通貨ごとにぴったり差額を出してから円に換算する。
+ * 旅行の精算表（target の通貨。初期値は円）。円と現地通貨が混ざっていても、
+ * 通貨ごとにぴったり差額を出してから target に換算する。
  * 換算の端数で合計が 0 からずれたら、いちばん多く負担する人で調整する。
  * repayments（もう渡したお金）があれば、その分を差し引いた残りで精算表を作る。
  */
 export function settlementForTrip(
   trip: Pick<Trip, 'members' | 'currency' | 'rate'>,
   expenses: (SplitExpense & Pick<Expense, 'currency'>)[],
-  repayments: Pick<Repayment, 'from' | 'to' | 'amount'>[] = [],
+  repayments: Pick<Repayment, 'from' | 'to' | 'amount' | 'currency'>[] = [],
+  target: string = JPY,
 ): SettlementResult {
   const byCur = new Map<string, typeof expenses>();
   for (const e of expenses) {
@@ -93,8 +101,8 @@ export function settlementForTrip(
     const bs = balancesOf(list, trip.members);
     const yen = bs.map((b) => ({
       id: b.memberId,
-      paid: convert(b.paid, cur, JPY, trip),
-      owed: convert(b.owed, cur, JPY, trip),
+      paid: convert(b.paid, cur, target, trip),
+      owed: convert(b.owed, cur, target, trip),
     }));
     // 換算の端数で「立て替え合計 ≠ 負担合計」になったら、いちばん多く負担する人の負担額で合わせる
     const gap = yen.reduce((a, b) => a + b.paid - b.owed, 0);
@@ -115,7 +123,7 @@ export function settlementForTrip(
       [r.to, 'received'],
     ] as const) {
       const t = total.get(id) ?? { memberId: id, paid: 0, owed: 0, diff: 0 };
-      t[key] = (t[key] ?? 0) + r.amount;
+      t[key] = (t[key] ?? 0) + convert(r.amount, r.currency ?? JPY, target, trip);
       total.set(id, t);
     }
   }
@@ -126,7 +134,7 @@ export function settlementForTrip(
 export type BreakdownLine = { expenseId: string; datetime: string; title: string; amount: number; share: number; payer: string };
 
 /**
- * メンバーごとの内訳（円）。割り勘した支出だけ（個人の支出は精算に関係しないので出さない）。
+ * メンバーごとの内訳（target の通貨）。割り勘した支出だけ（個人の支出は精算に関係しないので出さない）。
  * - advanced：その人が立て替えた支出（others = ほかの人の分）
  * - owes：ほかの人が立て替えた支出のうち、その人の負担分
  */
@@ -135,6 +143,7 @@ export function memberBreakdown(
   expenses: (SplitExpense & Pick<Expense, 'id' | 'currency' | 'datetime' | 'memo' | 'categoryId'>)[],
   memberId: string,
   titleOf: (e: Pick<Expense, 'memo' | 'categoryId'>) => string,
+  target: string = JPY,
 ): { advanced: (BreakdownLine & { others: number })[]; owes: BreakdownLine[] } {
   const advanced: (BreakdownLine & { others: number })[] = [];
   const owes: BreakdownLine[] = [];
@@ -142,7 +151,7 @@ export function memberBreakdown(
     const shares = sharesOf(e);
     const personal = Object.keys(shares).every((id) => id === e.paidBy);
     if (personal) continue;
-    const yen = (n: number) => convert(n, e.currency ?? JPY, JPY, trip);
+    const yen = (n: number) => convert(n, e.currency ?? JPY, target, trip);
     const line = {
       expenseId: e.id,
       datetime: e.datetime,

@@ -49,7 +49,7 @@ export class MemberInUseError extends Error {
 
 export class CurrencyInUseError extends Error {
   constructor(code: string) {
-    super(`${code} で記録した支出があるので、現地通貨は変更できません（レートは変更できます）`);
+    super(`${code} で記録した支出や精算があるので、現地通貨は変更できません（レートは変更できます）`);
   }
 }
 
@@ -61,7 +61,9 @@ export async function updateTrip(id: string, input: TripInput): Promise<void> {
     const newCur = input.currency ?? 'JPY';
     if (oldCur !== newCur && oldCur !== 'JPY') {
       // 前の現地通貨で記録した支出は、レートが無くなると円に換算できなくなる
-      const used = await db.expenses.where('tripId').equals(id).filter((e) => e.currency === oldCur).count();
+      const used =
+        (await db.expenses.where('tripId').equals(id).filter((e) => e.currency === oldCur).count()) +
+        (await db.repayments.where('tripId').equals(id).filter((r) => r.currency === oldCur).count());
       if (used > 0) throw new CurrencyInUseError(oldCur);
     }
     const keep = new Set(input.members.map((m) => m.id));

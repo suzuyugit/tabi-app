@@ -44,6 +44,7 @@ type Trip = {
   currency?: string;      // 現地通貨（ISO コード。未設定なら円）
   rate?: number;          // 1現地通貨 = rate 円（海外のときだけ）
   timeZone?: string;      // 現地の時間帯（IANA 名。未設定なら日本時間）
+  settleCurrency?: string; // 精算する通貨（円か現地通貨）。未設定なら円
   createdAt: string;
 };
 
@@ -100,8 +101,8 @@ type PackingItem = { id: string; tripId: string; name: string; checked: boolean;
 
 type Category = { id: string; name: string; icon: string; usageCount: number };
 
-// 精算で実際に渡したお金（全額でも一部でも）。金額は円
-type Repayment = { id: string; tripId: string; from: string; to: string; amount: number; datetime: string; memo?: string };
+// 精算で実際に渡したお金（全額でも一部でも）。金額は currency（未設定なら円）の最小単位
+type Repayment = { id: string; tripId: string; from: string; to: string; amount: number; currency?: string; datetime: string; memo?: string };
 ```
 
 - カテゴリの初期値：交通、宿、食事、カフェ・おやつ、観光、お土産、その他。自分で追加・編集・削除できる（削除すると使っていた支出は「その他」へ。「その他」は削除できない）
@@ -169,7 +170,8 @@ type Repayment = { id: string; tripId: string; from: string; to: string; amount:
 - メンバーごとに「立て替えた額」「負担する額」「もう渡した／受け取った額」「残りの差額」を出し、「内訳を見る」で、立て替えた支出（ほかの人の分）と、ほかの人が立て替えた支出のうち負担する分を一覧で見られる
 - 渡したお金の記録の一覧。間違えたら消せる（消すと精算表の残りに戻る）
 - 精算表をテキストでコピーするボタン（LINEに貼る用）
-- 海外の旅行でも精算は円で行う。通貨ごとにぴったり差額を出してから、旅行のレートで円に換算する（換算の端数は、いちばん多く負担する人で合わせる）
+- 海外の旅行では「円で精算／現地通貨で精算」を選べる（旅行ごとに覚える。初期値は円）。通貨ごとにぴったり差額を出してから、旅行のレートで精算する通貨に換算する（換算の端数は、いちばん多く負担する人で合わせる）
+- 渡したお金は渡した通貨のまま記録し、精算する通貨に換算して差し引く（円とドルで少しずつ返しても計算できる）
 
 ### 持ち物タブ
 

@@ -120,3 +120,24 @@ describe('個人の支出', () => {
     expect([suzuki.paid, suzuki.owed, suzuki.diff]).toEqual([30000, 10000, 20000]);
   });
 });
+
+describe('現地通貨で精算する', () => {
+  const trip = { members, currency: 'USD', rate: 150 };
+  const list = [
+    ex(9000, 'suzuki', { currency: 'USD' }), // $90（1人 $30）
+    ex(45000, 'sato'), // 45,000円 = $300（1人 $100）
+  ];
+  it('ドルで精算表を作る（セント）', () => {
+    const r = settlementForTrip(trip, list, [], 'USD');
+    expect(Object.fromEntries(r.balances.map((b) => [b.memberId, b.diff]))).toEqual({ suzuki: -4000, sato: 17000, tanaka: -13000 });
+    expect(r.transfers).toEqual([
+      { from: 'tanaka', to: 'sato', amount: 13000 },
+      { from: 'suzuki', to: 'sato', amount: 4000 },
+    ]);
+  });
+  it('円で渡した分もドルに換算して差し引く', () => {
+    const r = settlementForTrip(trip, list, [{ from: 'tanaka', to: 'sato', amount: 7500 }, { from: 'tanaka', to: 'sato', amount: 3000, currency: 'USD' }], 'USD');
+    // 7,500円 = $50、$30 → 残り $130 − $80 = $50
+    expect(r.transfers[0]).toEqual({ from: 'tanaka', to: 'sato', amount: 5000 });
+  });
+});

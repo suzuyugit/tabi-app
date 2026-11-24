@@ -13,6 +13,7 @@ export type Trip = {
   currency?: string; // 現地通貨（ISO コード。未設定なら円）
   rate?: number; // 1現地通貨 = rate 円（海外のときだけ）
   timeZone?: string; // 現地の時間帯（IANA 名。例：Pacific/Honolulu）。未設定なら日本時間
+  settleCurrency?: string; // 精算する通貨（円か現地通貨）。未設定なら円
   createdAt: string;
 };
 
@@ -83,13 +84,14 @@ export type PackingItem = { id: string; tripId: string; name: string; checked: b
 
 export type Category = { id: string; name: string; icon: string; usageCount: number };
 
-/** 精算で実際に渡したお金の記録（一部だけ返した分も含む）。金額は円 */
+/** 精算で実際に渡したお金の記録（一部だけ返した分も含む） */
 export type Repayment = {
   id: string;
   tripId: string;
   from: string; // 払った（返した）人の memberId
   to: string; // 受け取った人の memberId
-  amount: number; // 円
+  amount: number; // currency の最小単位
+  currency?: string; // 渡したお金の通貨。未設定なら円
   datetime: string; // ISO
   memo?: string;
 };

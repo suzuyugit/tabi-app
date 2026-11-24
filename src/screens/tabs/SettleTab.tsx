@@ -3,8 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { Trip } from '../../db/types';
 import { addRepayment, deleteRepayment } from '../../db/repaymentRepo';
-import { memberBreakdown, settlementForTrip, type Transfer } from '../../lib/settlement';
-import { formatMoney, isForeign, parseMoneyInput, tripCurrency } from '../../lib/currency';
+import { memberBreakdown, settleCurrencyOf, settlementForTrip, type Transfer } from '../../lib/settlement';
+import { convert, currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, tripCurrency } from '../../lib/currency';
 import { isoDate, nowIso } from '../../lib/datetime';
 import { formatMd } from '../../lib/date';
 import { copyText } from '../../lib/clipboard';
@@ -13,10 +13,12 @@ import { Sheet } from '../../components/Sheet';
 
 type Props = { trip: Trip };
 
-const yen = (n: number) => formatMoney(n);
-
 export function SettleTab({ trip }: Props) {
   const [repaying, setRepaying] = useState<Transfer | null>(null);
+  // 精算する通貨（円か現地通貨）。旅行ごとに覚えておく
+  const target = settleCurrencyOf(trip);
+  const yen = (n: number) => formatMoney(n, target);
+  const setTarget = (c: string) => db.trips.update(trip.id, { settleCurrency: c === JPY ? undefined : c });
 
   const data = useLiveQuery(async () => {
     const [expenses, repayments, categories] = await Promise.all([
@@ -26,7 +28,7 @@ export function SettleTab({ trip }: Props) {
     ]);
     repayments.sort((a, b) => a.datetime.localeCompare(b.datetime));
     const cats = new Map(categories.map((c) => [c.id, c]));
-    return { expenses, repayments, cats, ...settlementForTrip(trip, expenses, repayments) };
+    return { expenses, repayments, cats, ...settlementForTrip(trip, expenses, repayments, target) };
   }, [trip]);
 
   if (!data) return null;
@@ -40,7 +42,14 @@ export function SettleTab({ trip }: Props) {
   const sharedCount = data.expenses.filter((e) => !(e.splitAmong.length === 1 && e.splitAmong[0] === e.paidBy)).length;
 
   const payAll = async (t: Transfer) => {
-    await addRepayment({ tripId: trip.id, from: t.from, to: t.to, amount: t.amount, datetime: nowIso(trip.timeZone) });
+    await addRepayment({
+      tripId: trip.id,
+      from: t.from,
+      to: t.to,
+      amount: t.amount,
+      currency: target === JPY ? undefined : target,
+      datetime: nowIso(trip.timeZone),
+    });
     showToast(`${nameOf(t.from)} → ${nameOf(t.to)} ${yen(t.amount)} を精算済みにしました`);
   };
 
@@ -50,9 +59,10 @@ export function SettleTab({ trip }: Props) {
     for (const t of data.transfers) lines.push(`${nameOf(t.from)} → ${nameOf(t.to)}：${yen(t.amount)}`);
     if (data.repayments.length > 0) {
       lines.push('', '（もう渡した分）');
-      for (const r of data.repayments) lines.push(`${formatMd(isoDate(r.datetime, trip.timeZone))} ${nameOf(r.from)} → ${nameOf(r.to)}：${yen(r.amount)}`);
+      for (const r of data.repayments)
+        lines.push(`${formatMd(isoDate(r.datetime, trip.timeZone))} ${nameOf(r.from)} → ${nameOf(r.to)}：${formatMoney(r.amount, r.currency)}`);
     }
-    if (foreign) lines.push(`※ 1 ${tripCurrency(trip)} = ${trip.rate}円で換算`);
+    if (foreign) lines.push(`※ ${target === JPY ? '円' : target}で精算（1 ${tripCurrency(trip)} = ${trip.rate}円で換算）`);
     const ok = await copyText(lines.join('\n'));
     showToast(ok ? '精算表をコピーしました' : 'コピーできませんでした');
   };
@@ -66,6 +76,15 @@ export function SettleTab({ trip }: Props) {
 
   return (
     <div className="money">
+      {foreign && (
+        <div className="seg" role="radiogroup" aria-label="精算する通貨">
+          {[JPY, tripCurrency(trip)].map((c) => (
+            <button key={c} type="button" role="radio" aria-checked={target === c} className={target === c ? 'active' : ''} onClick={() => setTarget(c)}>
+              {c === JPY ? '円' : `${currencyInfo(c).name}（${c}）`}で精算
+            </button>
+          ))}
+        </div>
+      )}
       <section className="card">
         <div className="settle-head">
           <h3 className="card-title">精算表（残り）</h3>
@@ -97,14 +116,18 @@ export function SettleTab({ trip }: Props) {
             ))}
           </ul>
         )}
-        {foreign && <p className="muted small">円で精算します（1 {tripCurrency(trip)} = {trip.rate}円で換算）。</p>}
+        {foreign && (
+          <p className="muted small">
+            {target === JPY ? '円' : target}で精算します（1 {tripCurrency(trip)} = {trip.rate}円で換算）。もう渡したお金は、渡した通貨のまま記録して換算して差し引きます。
+          </p>
+        )}
       </section>
 
       <section className="card">
         <h3 className="card-title">メンバーごと</h3>
         <ul className="member-cards">
           {data.balances.map((b) => {
-            const d = memberBreakdown(trip, data.expenses, b.memberId, titleOf);
+            const d = memberBreakdown(trip, data.expenses, b.memberId, titleOf, target);
             return (
               <li key={b.memberId} className={`member-card ${b.memberId === meId ? 'me' : ''}`}>
                 <div className="member-card-head">
@@ -178,13 +201,16 @@ export function SettleTab({ trip }: Props) {
                   {nameOf(r.from)} → {nameOf(r.to)}
                   {r.memo && <span className="bd-sub">{r.memo}</span>}
                 </span>
-                <span className="bd-amount">{yen(r.amount)}</span>
+                <span className="bd-amount">
+                  {formatMoney(r.amount, r.currency)}
+                  {(r.currency ?? JPY) !== target && <span className="bd-sub">≈ {yen(convert(r.amount, r.currency ?? JPY, target, trip))}</span>}
+                </span>
                 <button
                   type="button"
                   className="icon-btn danger"
                   aria-label="この記録を消す"
                   onClick={async () => {
-                    if (!confirm(`${nameOf(r.from)} → ${nameOf(r.to)} ${yen(r.amount)} の記録を消しますか？`)) return;
+                    if (!confirm(`${nameOf(r.from)} → ${nameOf(r.to)} ${formatMoney(r.amount, r.currency)} の記録を消しますか？`)) return;
                     await deleteRepayment(r.id);
                   }}
                 >
@@ -200,6 +226,7 @@ export function SettleTab({ trip }: Props) {
       {repaying && (
         <RepaySheet
           trip={trip}
+          currency={target}
           transfer={repaying}
           fromName={nameOf(repaying.from)}
           toName={nameOf(repaying.to)}
@@ -213,12 +240,14 @@ export function SettleTab({ trip }: Props) {
 /** 一部だけ返したときの入力 */
 function RepaySheet({
   trip,
+  currency,
   transfer,
   fromName,
   toName,
   onClose,
 }: {
   trip: Trip;
+  currency: string;
   transfer: Transfer;
   fromName: string;
   toName: string;
@@ -227,11 +256,21 @@ function RepaySheet({
   const [amount, setAmount] = useState('');
   const [memo, setMemo] = useState('');
   const [error, setError] = useState('');
-  const n = parseMoneyInput(amount);
+  const n = parseMoneyInput(amount, currency);
+  const yen = (v: number) => formatMoney(v, currency);
+  const info = currencyInfo(currency);
 
   const save = async () => {
     if (n === undefined || Number.isNaN(n) || n <= 0) return setError('返した額を入れてください');
-    await addRepayment({ tripId: trip.id, from: transfer.from, to: transfer.to, amount: n, datetime: nowIso(trip.timeZone), memo: memo.trim() || undefined });
+    await addRepayment({
+      tripId: trip.id,
+      from: transfer.from,
+      to: transfer.to,
+      amount: n,
+      currency: currency === JPY ? undefined : currency,
+      datetime: nowIso(trip.timeZone),
+      memo: memo.trim() || undefined,
+    });
     showToast(`${fromName} → ${toName} ${yen(n)} を記録しました`);
     onClose();
   };
@@ -256,8 +295,14 @@ function RepaySheet({
           </p>
         )}
         <label className="field">
-          <span className="label">返した額（円）</span>
-          <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="例：5000" autoFocus />
+          <span className="label">返した額（{currency === JPY ? '円' : info.name}）</span>
+          <input
+            inputMode={info.decimals > 0 ? 'decimal' : 'numeric'}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder={currency === JPY ? '例：5000' : '例：50'}
+            autoFocus
+          />
         </label>
         {n !== undefined && !Number.isNaN(n) && n > 0 && (
           <p className={`hint ${n > transfer.amount ? 'over' : ''}`}>
