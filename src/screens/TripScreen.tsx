@@ -6,13 +6,15 @@ import { formatRange } from '../lib/date';
 import { navigate, type TabKey } from '../router';
 import { ItineraryTab } from './tabs/ItineraryTab';
 import { MoneyTab } from './tabs/MoneyTab';
+import { SettleTab } from './tabs/SettleTab';
+import { PackingTab } from './tabs/PackingTab';
 import { ExpenseSheet } from '../components/ExpenseSheet';
 
-const TABS: { key: TabKey; label: string; icon: string; step: number }[] = [
-  { key: 'itinerary', label: '旅程', icon: '🗓️', step: 2 },
-  { key: 'money', label: 'お金', icon: '💴', step: 2 },
-  { key: 'settle', label: '精算', icon: '🤝', step: 3 },
-  { key: 'packing', label: '持ち物', icon: '🎒', step: 3 },
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'itinerary', label: '旅程', icon: '🗓️' },
+  { key: 'money', label: 'お金', icon: '💴' },
+  { key: 'settle', label: '精算', icon: '🤝' },
+  { key: 'packing', label: '持ち物', icon: '🎒' },
 ];
 
 type Props = { tripId: string; tab: TabKey };
@@ -38,8 +40,6 @@ export function TripScreen({ tripId, tab }: Props) {
     );
   }
 
-  const current = TABS.find((t) => t.key === tab)!;
-
   return (
     <div className="screen has-tabbar">
       <header className="app-header">
@@ -58,13 +58,10 @@ export function TripScreen({ tripId, tab }: Props) {
           <ItineraryTab trip={trip} />
         ) : tab === 'money' ? (
           <MoneyTab trip={trip} onEdit={(expense) => setExpenseSheet({ expense })} />
+        ) : tab === 'settle' ? (
+          <SettleTab trip={trip} />
         ) : (
-          <div className="empty">
-            <p>
-              {current.icon} {current.label}タブ
-            </p>
-            <p className="muted">開発ステップ{current.step}で作ります。</p>
-          </div>
+          <PackingTab trip={trip} />
         )}
       </main>
 
