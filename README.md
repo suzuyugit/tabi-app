@@ -1,6 +1,6 @@
 # たびメモ（旅程アプリ）
 
-仕様は [SPEC.md](./SPEC.md)。現在は **開発ステップ3（割り勘と持ち物）** まで。公開先：https://suzuyugit.github.io/tabi-app/
+仕様は [SPEC.md](./SPEC.md)。現在は **開発ステップ4（共有と当日モード）** まで。公開先：https://suzuyugit.github.io/tabi-app/
 
 ## コマンド
 
@@ -24,6 +24,8 @@ src/
   lib/money.ts      合計・見積もり・現金の残り
   lib/currency.ts   通貨・換算
   lib/timezone.ts   時差
+  lib/share.ts      共有リンク（lz-string で圧縮して URL の # 以降に入れる）
+  lib/summary.ts    旅行のまとめ
   lib/date.ts       日付の表示・計算
   router.ts         ハッシュ（#/...）による画面切り替え
   screens/          旅行一覧・旅行の作成/編集・旅行ごとの画面と4つのタブ

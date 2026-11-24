@@ -9,6 +9,7 @@ import { MoneyTab } from './tabs/MoneyTab';
 import { SettleTab } from './tabs/SettleTab';
 import { PackingTab } from './tabs/PackingTab';
 import { ExpenseSheet } from '../components/ExpenseSheet';
+import { ShareSheet } from '../components/ShareSheet';
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'itinerary', label: '旅程', icon: '🗓️' },
@@ -23,6 +24,7 @@ export function TripScreen({ tripId, tab }: Props) {
   // null = 見つからない / undefined = 読み込み中
   const trip = useLiveQuery(async () => (await db.trips.get(tripId)) ?? null, [tripId]);
   const [expenseSheet, setExpenseSheet] = useState<{ expense?: Expense } | null>(null);
+  const [sharing, setSharing] = useState(false);
   // iPhone はタップの処理の中でフォーカスしないとキーボードが出ない。
   // ＋ボタンを押した瞬間にこの見えない入力欄へフォーカスしてキーボードを出し、
   // シートが開いたら金額欄へフォーカスを移す。
@@ -48,6 +50,9 @@ export function TripScreen({ tripId, tab }: Props) {
           <h1>{trip.name}</h1>
           <div className="sub">{formatRange(trip.startDate, trip.endDate)}</div>
         </div>
+        <button className="btn btn-ghost btn-small" onClick={() => setSharing(true)} aria-label="共有">
+          ↗ 共有
+        </button>
         <button className="btn btn-ghost btn-small" onClick={() => navigate({ name: 'editTrip', tripId })}>
           編集
         </button>
@@ -91,6 +96,7 @@ export function TripScreen({ tripId, tab }: Props) {
         ))}
       </nav>
 
+      {sharing && <ShareSheet trip={trip} onClose={() => setSharing(false)} />}
       {expenseSheet && (
         <ExpenseSheet trip={trip} expense={expenseSheet.expense} onClose={() => setExpenseSheet(null)} />
       )}

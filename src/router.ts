@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 // GitHub Pages ではサーバー側のルーティングが使えないので、ハッシュ（#/...）で画面を切り替える。
-// 共有リンク（#share=...）はステップ4でここに追加する。
 
 export type TabKey = 'itinerary' | 'money' | 'settle' | 'packing';
 export const TAB_KEYS: TabKey[] = ['itinerary', 'money', 'settle', 'packing'];
@@ -9,12 +8,15 @@ export const TAB_KEYS: TabKey[] = ['itinerary', 'money', 'settle', 'packing'];
 export type Route =
   | { name: 'list' }
   | { name: 'settings' }
+  | { name: 'share'; data: string }
   | { name: 'newTrip' }
   | { name: 'editTrip'; tripId: string }
   | { name: 'summary'; tripId: string }
   | { name: 'trip'; tripId: string; tab: TabKey };
 
 export function parseHash(hash: string): Route {
+  // 共有リンク（#share=圧縮した文字列）
+  if (hash.startsWith('#share=')) return { name: 'share', data: hash.slice('#share='.length) };
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
   if (parts[0] === 'new') return { name: 'newTrip' };
   if (parts[0] === 'settings') return { name: 'settings' };
@@ -33,6 +35,8 @@ export function routeToHash(r: Route): string {
       return '#/';
     case 'settings':
       return '#/settings';
+    case 'share':
+      return `#share=${r.data}`;
     case 'newTrip':
       return '#/new';
     case 'editTrip':

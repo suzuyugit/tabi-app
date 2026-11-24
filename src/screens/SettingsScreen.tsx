@@ -4,6 +4,8 @@ import { useCategories, useItemKinds } from '../hooks/useKinds';
 import { IconNameSheet } from '../components/IconNameSheet';
 import { LOCKED_CATEGORIES, LOCKED_KINDS } from '../lib/kinds';
 import { navigate } from '../router';
+import { encodePayload, parsePayload } from '../lib/share';
+import { showToast } from '../components/Toast';
 
 type Editing = { mode: 'category'; target?: Category } | { mode: 'kind'; target?: ItemKindDef } | null;
 
@@ -67,6 +69,29 @@ export function SettingsScreen() {
               </li>
             ))}
           </ul>
+        </section>
+        <section className="card">
+          <h3 className="card-title">共有ファイルを開く</h3>
+          <p className="muted small">リンクが長すぎて JSON ファイルで送られてきた旅程・割り勘を読み込みます。</p>
+          <label className="btn btn-ghost btn-block file-btn">
+            📄 ファイルを選ぶ
+            <input
+              type="file"
+              accept=".json,application/json"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (!f) return;
+                try {
+                  const p = parsePayload(JSON.parse(await f.text()));
+                  if (!p) throw new Error('bad');
+                  navigate({ name: 'share', data: encodePayload(p) });
+                } catch {
+                  showToast('共有ファイルとして読み込めませんでした');
+                }
+              }}
+            />
+          </label>
         </section>
       </main>
 

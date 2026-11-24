@@ -2258,3 +2258,68 @@ textarea {
   margin-top: 6px;
   width: 100%;
 }
+
+/* --- 共有 --- */
+.share-contents ul {
+  margin: 4px 0 10px;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.share-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--danger-weak);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.shared-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.shared-items li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.shared-time {
+  flex: none;
+  width: 64px;
+  font-weight: 700;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.shared-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shared-title {
+  font-weight: 600;
+}
+
+.import-card {
+  border: 2px solid var(--primary);
+}
+
+.file-btn {
+  position: relative;
+  text-align: center;
+}
+
+.file-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
