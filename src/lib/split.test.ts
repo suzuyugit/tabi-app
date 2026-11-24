@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sharesOf, validateExpense } from './split';
+import { roundTo, roundUnitsFor, sharesOf, validateExpense } from './split';
 import { cashRemaining, myTotal, summarize } from './money';
 import type { Expense, Trip } from '../db/types';
 
@@ -113,5 +113,25 @@ describe('見積もり', () => {
     expect(f.plannedByCategory.get('cat-02-hotel')).toBe(6000);
     expect(f.plannedByCategory.has('cat-03-food')).toBe(false);
     expect(forecast(trip, expenses, items, 'USD').total).toBe(6000 + 3000 + 4000); // セント
+  });
+});
+
+describe('ざっくり割り勘', () => {
+  it('払った人以外をきりのいい額に。ずれは払った人', () => {
+    // 10,000円 ÷ 3 = 3,333.3…
+    expect(sharesOf({ ...base, amount: 10000, roundUnit: 100, roundMode: 'up' })).toEqual({ a: 3200, b: 3400, c: 3400 });
+    expect(sharesOf({ ...base, amount: 10000, roundUnit: 100, roundMode: 'down' })).toEqual({ a: 3400, b: 3300, c: 3300 });
+    expect(sharesOf({ ...base, amount: 10000, roundUnit: 1000, roundMode: 'nearest' })).toEqual({ a: 4000, b: 3000, c: 3000 });
+  });
+  it('払った人の負担がマイナスになるときや、払った人が割る人にいないときは普通に割る', () => {
+    expect(sharesOf({ ...base, amount: 300, roundUnit: 1000, roundMode: 'up' })).toEqual({ a: 100, b: 100, c: 100 });
+    expect(sharesOf({ ...base, amount: 1000, paidBy: 'd', roundUnit: 100, roundMode: 'up' })).toEqual({ a: 333, b: 333, c: 333, d: 1 });
+  });
+  it('丸めと単位の候補', () => {
+    expect(roundTo(3333.3, 100, 'nearest')).toBe(3300);
+    expect(roundTo(3300, 100, 'up')).toBe(3300);
+    expect(roundUnitsFor('JPY').map((u) => u.label)).toEqual(['10円', '100円', '1,000円']);
+    expect(roundUnitsFor('USD').map((u) => u.unit)).toEqual([100, 500, 1000]);
+    expect(roundUnitsFor('KRW').map((u) => u.label)).toEqual(['₩100', '₩1,000', '₩10,000']);
   });
 });

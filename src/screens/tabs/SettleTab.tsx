@@ -4,6 +4,7 @@ import { db } from '../../db/db';
 import type { Trip } from '../../db/types';
 import { addRepayment, deleteRepayment } from '../../db/repaymentRepo';
 import { memberBreakdown, settleCurrencyOf, settlementForTrip, type Transfer } from '../../lib/settlement';
+import { roundTo, roundUnitsFor } from '../../lib/split';
 import { convert, currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, tripCurrency } from '../../lib/currency';
 import { isoDate, nowIso } from '../../lib/datetime';
 import { formatMd } from '../../lib/date';
@@ -32,6 +33,13 @@ export function SettleTab({ trip }: Props) {
   }, [trip]);
 
   if (!data) return null;
+
+  // ざっくり精算：精算表の額をきりのいい額に四捨五入。0 になる受け渡しは「端数なので精算なし」
+  const roundUnits = roundUnitsFor(target).slice(1);
+  const settleRound = roundUnits.some((u) => u.unit === trip.settleRound) ? trip.settleRound! : 0;
+  const rounded = data.transfers.map((t) => ({ ...t, exact: t.amount, amount: settleRound ? roundTo(t.amount, settleRound, 'nearest') : t.amount }));
+  const transfers = rounded.filter((t) => t.amount > 0);
+  const dropped = rounded.filter((t) => t.amount <= 0);
   const nameOf = (id: string) => trip.members.find((m) => m.id === id)?.name ?? '（削除されたメンバー）';
   const meId = trip.members.find((m) => m.isMe)?.id;
   const foreign = isForeign(trip);
@@ -55,8 +63,8 @@ export function SettleTab({ trip }: Props) {
 
   const copy = async () => {
     const lines = [`【${trip.name} 精算】`];
-    if (data.transfers.length === 0) lines.push('精算はすべて済みました');
-    for (const t of data.transfers) lines.push(`${nameOf(t.from)} → ${nameOf(t.to)}：${yen(t.amount)}`);
+    if (transfers.length === 0) lines.push('精算はすべて済みました');
+    for (const t of transfers) lines.push(`${nameOf(t.from)} → ${nameOf(t.to)}：${yen(t.amount)}`);
     if (data.repayments.length > 0) {
       lines.push('', '（もう渡した分）');
       for (const r of data.repayments)
@@ -92,11 +100,11 @@ export function SettleTab({ trip }: Props) {
             📋 テキストでコピー
           </button>
         </div>
-        {data.transfers.length === 0 ? (
+        {transfers.length === 0 ? (
           <p className="muted">{data.repayments.length > 0 ? '✅ 精算はすべて済みました。' : '全員の負担がぴったりなので、精算はいりません 🎉'}</p>
         ) : (
           <ul className="transfer-list">
-            {data.transfers.map((t) => (
+            {transfers.map((t) => (
               <li key={`${t.from}>${t.to}`} className={`transfer ${t.from === meId || t.to === meId ? 'mine' : ''}`}>
                 <div className="transfer-main">
                   <span className="transfer-names">
@@ -116,6 +124,26 @@ export function SettleTab({ trip }: Props) {
             ))}
           </ul>
         )}
+        {dropped.length > 0 && (
+          <p className="muted small">
+            端数なので精算なし：{dropped.map((t) => `${nameOf(t.from)} → ${nameOf(t.to)} ${yen(t.exact)}`).join('、')}
+          </p>
+        )}
+        <label className="round-row settle-round">
+          <span className="muted small">ざっくり精算</span>
+          <select
+            value={settleRound}
+            onChange={(e) => db.trips.update(trip.id, { settleRound: Number(e.target.value) || undefined })}
+            aria-label="ざっくり精算"
+          >
+            <option value={0}>そのまま</option>
+            {roundUnits.map((u) => (
+              <option key={u.unit} value={u.unit}>
+                {u.label}単位に四捨五入
+              </option>
+            ))}
+          </select>
+        </label>
         {foreign && (
           <p className="muted small">
             {target === JPY ? '円' : target}で精算します（1 {tripCurrency(trip)} = {trip.rate}円で換算）。もう渡したお金は、渡した通貨のまま記録して換算して差し引きます。

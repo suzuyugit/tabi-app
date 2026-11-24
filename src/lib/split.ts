@@ -1,5 +1,5 @@
-import type { Expense, PaymentMethod } from '../db/types';
-import { formatMoney } from './currency';
+import type { Expense, PaymentMethod, RoundMode } from '../db/types';
+import { currencyInfo, formatMoney } from './currency';
 
 export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   cash: '現金',
@@ -9,7 +9,9 @@ export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
 };
 export const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'card', 'paypay', 'other'];
 
-type SplitPart = Pick<Expense, 'amount' | 'paidBy' | 'splitAmong' | 'splitMode' | 'customShares'> & { currency?: string };
+type SplitPart = Pick<Expense, 'amount' | 'paidBy' | 'splitAmong' | 'splitMode' | 'customShares' | 'roundUnit' | 'roundMode'> & {
+  currency?: string;
+};
 
 /**
  * 支出1件について、各メンバーが負担する額。合計は必ず amount になる。
@@ -24,6 +26,18 @@ export function sharesOf(e: SplitPart): Record<string, number> {
   }
   const n = e.splitAmong.length;
   if (n === 0) return shares;
+  // ざっくり：払った人以外をきりのいい額にそろえ、ずれは払った人が持つ（払った人が割る人に入っているときだけ）
+  if (e.roundUnit && e.roundUnit > 1 && e.splitAmong.includes(e.paidBy)) {
+    const each = roundTo(e.amount / n, e.roundUnit, e.roundMode ?? 'nearest');
+    const others = e.splitAmong.filter((id) => id !== e.paidBy);
+    const payerShare = e.amount - each * others.length;
+    if (payerShare >= 0) {
+      for (const id of others) shares[id] = each;
+      shares[e.paidBy] = payerShare;
+      return shares;
+    }
+    // 払った人の負担がマイナスになるほど小さい金額なら、ざっくりにしない
+  }
   const base = Math.floor(e.amount / n);
   for (const id of e.splitAmong) shares[id] = base;
   const rest = e.amount - base * n;
@@ -51,3 +65,19 @@ export function validateExpense(e: SplitPart & { categoryId: string }, memberIds
   }
   return undefined;
 }
+
+/** value を unit 単位に丸める */
+export function roundTo(value: number, unit: number, mode: RoundMode): number {
+  const q = value / unit;
+  const r = mode === 'up' ? Math.ceil(q - 1e-9) : mode === 'down' ? Math.floor(q + 1e-9) : Math.round(q);
+  return r * unit;
+}
+
+/** ざっくりの単位の候補（その通貨の最小単位で）。円は 10/100/1000円、ウォンなどは 100/1000/10000、ドルなどは 1/5/10 */
+export function roundUnitsFor(code: string | undefined): { unit: number; label: string }[] {
+  const c = currencyInfo(code);
+  const majors = c.decimals > 0 ? [1, 5, 10] : c.code === 'JPY' || c.code === 'TWD' ? [10, 100, 1000] : [100, 1000, 10000];
+  return majors.map((m) => ({ unit: m * 10 ** c.decimals, label: formatMoney(m * 10 ** c.decimals, c.code) }));
+}
+
+export const ROUND_MODE_LABEL: Record<RoundMode, string> = { up: '切り上げ', nearest: '四捨五入', down: '切り捨て' };

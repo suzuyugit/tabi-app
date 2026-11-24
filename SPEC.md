@@ -45,6 +45,7 @@ type Trip = {
   rate?: number;          // 1現地通貨 = rate 円（海外のときだけ）
   timeZone?: string;      // 現地の時間帯（IANA 名。未設定なら日本時間）
   settleCurrency?: string; // 精算する通貨（円か現地通貨）。未設定なら円
+  settleRound?: number;   // ざっくり精算の単位（精算する通貨の最小単位）
   createdAt: string;
 };
 
@@ -95,6 +96,8 @@ type Expense = {
   splitAmong: string[];   // memberId[]。初期値：払った人だけ（＝個人の支出）。割り勘するときだけ人を選ぶ
   splitMode: 'equal' | 'custom';
   customShares?: Record<string, number>; // customのときの各自の負担額
+  roundUnit?: number;     // ざっくり割り勘の単位（最小単位）
+  roundMode?: 'up' | 'nearest' | 'down';
 };
 
 type PackingItem = { id: string; tripId: string; name: string; checked: boolean; order: number };
@@ -172,6 +175,7 @@ type Repayment = { id: string; tripId: string; from: string; to: string; amount:
 - 精算表をテキストでコピーするボタン（LINEに貼る用）
 - 海外の旅行では「円で精算／現地通貨で精算」を選べる（旅行ごとに覚える。初期値は円）。通貨ごとにぴったり差額を出してから、旅行のレートで精算する通貨に換算する（換算の端数は、いちばん多く負担する人で合わせる）
 - 渡したお金は渡した通貨のまま記録し、精算する通貨に換算して差し引く（円とドルで少しずつ返しても計算できる）
+- ざっくり精算：精算表の額を 100円／1000円単位（ドルなら $5／$10）に四捨五入して出せる。0 になる受け渡しは「端数なので精算なし」
 
 ### 持ち物タブ
 
@@ -194,6 +198,7 @@ type Repayment = { id: string; tripId: string; from: string; to: string; amount:
 1. 全員の差額を 0 で始める
 2. 支出ごとに、払った人に `+amount`、割る人たちに `−負担額` を足す
    1. equal：負担額 = amount ÷ 人数の切り捨て。割り切れない端数は払った人がかぶる
+      - ざっくり（`roundUnit`・`roundMode`）を選んだときは、払った人以外の負担額を 10円／100円／1000円単位（ドルなら $1／$5／$10）に切り上げ・四捨五入・切り捨てでそろえ、ずれは払った人が持つ（払った人が割る人に入っていて、払った人の負担がマイナスにならないときだけ）
    2. custom：`customShares` の額をそのまま使う。合計が amount と一致しないと保存できない
 3. 差額がプラスの人（受け取る人）とマイナスの人（払う人）に分け、それぞれ額の大きい順に並べる
 4. 先頭同士で「小さいほうの額」を送金し、両方の差額を減らす。0 になった人はリストから外す

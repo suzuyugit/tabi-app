@@ -14,6 +14,7 @@ export type Trip = {
   rate?: number; // 1現地通貨 = rate 円（海外のときだけ）
   timeZone?: string; // 現地の時間帯（IANA 名。例：Pacific/Honolulu）。未設定なら日本時間
   settleCurrency?: string; // 精算する通貨（円か現地通貨）。未設定なら円
+  settleRound?: number; // ざっくり精算：精算表の額をこの単位（精算する通貨の最小単位）で四捨五入。0 / 未設定ならそのまま
   createdAt: string;
 };
 
@@ -62,6 +63,9 @@ export type ItineraryItem = {
   order: number;
 };
 
+/** 端数の丸め方 */
+export type RoundMode = 'up' | 'nearest' | 'down';
+
 export type PaymentMethod = 'cash' | 'card' | 'paypay' | 'other';
 
 export type Expense = {
@@ -78,6 +82,9 @@ export type Expense = {
   splitAmong: string[]; // memberId[]
   splitMode: 'equal' | 'custom';
   customShares?: Record<string, number>; // currency の最小単位
+  /** 均等に割るとき、払った人以外の負担額をこの単位（currency の最小単位）でそろえる。ずれは払った人が持つ */
+  roundUnit?: number;
+  roundMode?: RoundMode;
 };
 
 export type PackingItem = { id: string; tripId: string; name: string; checked: boolean; order: number };

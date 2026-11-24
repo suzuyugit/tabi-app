@@ -35,6 +35,10 @@ export async function saveExpense(tripId: string, input: ExpenseInput, id?: stri
     const prev = id ? await db.expenses.get(id) : undefined;
     const e: Expense = { ...input, id: expenseId, tripId };
     if (e.splitMode !== 'custom') delete e.customShares;
+    if (!e.roundUnit) {
+      delete e.roundUnit;
+      delete e.roundMode;
+    }
     if (!e.itemId) delete e.itemId;
     if (!e.memo) delete e.memo;
     await db.expenses.put(e);

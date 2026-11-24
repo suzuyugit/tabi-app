@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import type { Expense, PaymentMethod, Trip } from '../db/types';
+import type { Expense, PaymentMethod, RoundMode, Trip } from '../db/types';
 import { deleteExpense, lastPaymentMethod, saveExpense, type ExpenseInput } from '../db/expenseRepo';
 import { inputToIso, isoToInput, nowIso } from '../lib/datetime';
 import { byOrder, nearestItem, tripDays } from '../lib/itinerary';
@@ -9,7 +9,7 @@ import { hasTimeDiff, nowWall } from '../lib/timezone';
 import { formatMd } from '../lib/date';
 import { convert, currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
 import { expenseCurrency } from '../lib/money';
-import { PAYMENT_LABEL, PAYMENT_METHODS, sharesOf, validateExpense } from '../lib/split';
+import { PAYMENT_LABEL, PAYMENT_METHODS, ROUND_MODE_LABEL, roundUnitsFor, sharesOf, validateExpense } from '../lib/split';
 import { Sheet } from './Sheet';
 import { IconNameSheet } from './IconNameSheet';
 import { useCategories } from '../hooks/useKinds';
@@ -37,6 +37,9 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
     expense && !isPersonal(expense) ? expense.splitAmong : trip.members.map((m) => m.id),
   );
   const [splitMode, setSplitMode] = useState(expense?.splitMode ?? 'equal');
+  // ざっくり（端数をきりのいい額に）。0 = そのまま
+  const [roundUnit, setRoundUnit] = useState(expense?.roundUnit ?? 0);
+  const [roundMode, setRoundMode] = useState<RoundMode>(expense?.roundMode ?? 'up');
   const [custom, setCustom] = useState<Record<string, string>>(() =>
     Object.fromEntries(Object.entries(expense?.customShares ?? {}).map(([k, v]) => [k, toInputValue(v, expenseCurrency(expense!))])),
   );
@@ -98,6 +101,8 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
       splitAmong: shared ? splitAmong : [me.id],
       splitMode: shared ? splitMode : 'equal',
       customShares: shared && splitMode === 'custom' ? customShares : undefined,
+      roundUnit: useRound ? roundUnit : undefined,
+      roundMode: useRound ? roundMode : undefined,
     };
     const err = validateExpense(input, trip.members.map((m) => m.id));
     if (err) return setError(err);
@@ -113,8 +118,19 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
     onClose();
   };
 
+  const roundUnits = roundUnitsFor(currency);
+  // 通貨を変えたなどで単位が候補にないときは「そのまま」
+  const useRound = shared && splitMode === 'equal' && roundUnits.some((u) => u.unit === roundUnit);
+
   const equalPreview = (() => {
     if (!amountOk || !amountNum || splitAmong.length === 0) return '';
+    if (useRound) {
+      const shares = sharesOf({ amount: amountNum, paidBy, splitAmong, splitMode: 'equal', roundUnit, roundMode });
+      const others = splitAmong.filter((id) => id !== paidBy);
+      if (splitAmong.includes(paidBy) && others.length > 0 && shares[others[0]] % roundUnit === 0) {
+        return `${others.map(nameOf).join('・')} ${fmt(shares[others[0]])}／${nameOf(paidBy)}（払った人）${fmt(shares[paidBy])}`;
+      }
+    }
     const base = Math.floor(amountNum / splitAmong.length);
     const rest = amountNum - base * splitAmong.length;
     return `1人 ${fmt(base)}${rest ? `（端数 ${fmt(rest)}は${nameOf(paidBy)}）` : ''}`;
@@ -290,7 +306,40 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
                 ))}
               </div>
               {splitMode === 'equal' ? (
-                equalPreview && <span className="hint">{equalPreview}</span>
+                <>
+                  <div className="round-row">
+                    <span className="muted small">端数</span>
+                    <select
+                      value={useRound ? roundUnit : 0}
+                      onChange={(e) => setRoundUnit(Number(e.target.value))}
+                      aria-label="端数"
+                    >
+                      <option value={0}>そのまま</option>
+                      {roundUnits.map((u) => (
+                        <option key={u.unit} value={u.unit}>
+                          {u.label}単位
+                        </option>
+                      ))}
+                    </select>
+                    {useRound && (
+                      <div className="seg seg-small" role="radiogroup" aria-label="丸め方">
+                        {(['up', 'nearest', 'down'] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            role="radio"
+                            aria-checked={roundMode === m}
+                            className={roundMode === m ? 'active' : ''}
+                            onClick={() => setRoundMode(m)}
+                          >
+                            {ROUND_MODE_LABEL[m]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {equalPreview && <span className="hint">{equalPreview}</span>}
+                </>
               ) : (
                 <div className="custom-shares">
                   {splitAmong.map((id) => (
