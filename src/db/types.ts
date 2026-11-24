@@ -1,0 +1,52 @@
+// SPEC.md「データ設計」のとおり。金額はすべて整数（円）、日時は ISO 文字列。
+
+export type Member = { id: string; name: string; isMe: boolean };
+
+export type Trip = {
+  id: string;
+  name: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;
+  budget: number; // 予算（円）
+  members: Member[]; // 自分＋友人
+  cashOnHand?: number; // 出発時の自分の手持ち現金
+  createdAt: string;
+};
+
+export type ItineraryItem = {
+  id: string;
+  tripId: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  title: string;
+  place?: string;
+  memo?: string;
+  estimatedCost?: number;
+  reservationNo?: string;
+  checkInTime?: string; // HH:mm
+  url?: string;
+  order: number;
+};
+
+export type PaymentMethod = 'cash' | 'card' | 'paypay' | 'other';
+
+export type Expense = {
+  id: string;
+  tripId: string;
+  amount: number;
+  categoryId: string;
+  paymentMethod: PaymentMethod;
+  memo?: string;
+  datetime: string;
+  itemId?: string;
+  paidBy: string; // memberId
+  splitAmong: string[]; // memberId[]
+  splitMode: 'equal' | 'custom';
+  customShares?: Record<string, number>;
+};
+
+export type PackingItem = { id: string; tripId: string; name: string; checked: boolean; order: number };
+
+export type Category = { id: string; name: string; icon: string; usageCount: number };
+
+export type Settlement = { tripId: string; from: string; to: string; amount: number; done: boolean };
