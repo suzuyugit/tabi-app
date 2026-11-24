@@ -8,6 +8,7 @@ import { LOCKED_CATEGORIES, LOCKED_KINDS } from '../lib/kinds';
 import { navigate } from '../router';
 import { encodePayload, parsePayload } from '../lib/share';
 import { showToast } from '../components/Toast';
+import { BackupSection } from '../components/BackupSection';
 
 type Editing = { mode: 'category'; target?: Category } | { mode: 'kind'; target?: ItemKindDef } | null;
 
@@ -82,6 +83,8 @@ export function SettingsScreen() {
             🎒 持ち物リストを開く（{lists?.length ?? 0}件）
           </button>
         </section>
+
+        <BackupSection />
 
         <section className="card">
           <h3 className="card-title">共有ファイルを開く</h3>

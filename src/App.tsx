@@ -4,6 +4,7 @@ import { TripListScreen } from './screens/TripListScreen';
 import { TripFormScreen } from './screens/TripFormScreen';
 import { TripScreen } from './screens/TripScreen';
 import { ToastHost } from './components/Toast';
+import { UpdateBanner } from './components/UpdateBanner';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SummaryScreen } from './screens/SummaryScreen';
 import { ShareViewScreen } from './screens/ShareViewScreen';
@@ -44,6 +45,7 @@ export function App() {
     <>
       {renderRoute(route)}
       <ToastHost />
+      <UpdateBanner />
     </>
   );
 }

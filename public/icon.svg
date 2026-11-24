@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0f766e"/>
+  <!-- スーツケース -->
+  <rect x="176" y="118" width="160" height="70" rx="26" fill="none" stroke="#ffffff" stroke-width="26"/>
+  <rect x="104" y="170" width="304" height="236" rx="40" fill="#ffffff"/>
+  <rect x="104" y="250" width="304" height="22" fill="#0f766e" opacity="0.25"/>
+  <!-- 地図のピン -->
+  <path d="M256 210c-34 0-60 26-60 58 0 44 60 104 60 104s60-60 60-104c0-32-26-58-60-58z" fill="#0f766e"/>
+  <circle cx="256" cy="268" r="22" fill="#ffffff"/>
+</svg>
