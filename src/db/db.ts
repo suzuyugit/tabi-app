@@ -60,6 +60,21 @@ export class TabiDB extends Dexie {
     // v5：持ち物リストに名前を付けて保存できるようにした
     this.version(5).stores({ packingLists: 'id, name' });
 
+    // v6：支出に記録したときのレート（rateAtRecord）を持たせた。今ある現地通貨の支出には、その旅行の今のレートを入れる
+    this.version(6)
+      .stores({})
+      .upgrade(async (tx) => {
+        const rates = new Map<string, number | undefined>();
+        await tx.table('trips').each((t: Trip) => rates.set(t.id, t.rate));
+        await tx
+          .table('expenses')
+          .toCollection()
+          .modify((e: Expense) => {
+            const rate = rates.get(e.tripId);
+            if (e.currency && e.currency !== 'JPY' && e.rateAtRecord === undefined && rate && rate > 0) e.rateAtRecord = rate;
+          });
+      });
+
     // 初回作成時だけカテゴリの初期値を入れる
     this.on('populate', (tx) => {
       tx.table('categories').bulkAdd(DEFAULT_CATEGORIES.map((c) => ({ ...c, usageCount: 0 })));

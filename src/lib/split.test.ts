@@ -79,6 +79,18 @@ describe('money', () => {
     // 現金の残りは現地通貨の現金だけ減る：$200 − $30
     expect(cashRemaining(usd, mixed)).toEqual({ start: 20000, paid: 3000, rest: 17000, currency: 'USD' });
   });
+
+  it('使った額の円換算は記録したときのレート。旅行のレートを変えても変わらない', () => {
+    const usd: Trip = { ...trip, currency: 'USD', rate: 160 }; // あとで 150 → 160 に変えた
+    const list: Expense[] = [
+      { ...ex('1', 3000, 'a', 'cash', '2026-12-01T12:00:00+09:00'), currency: 'USD', rateAtRecord: 150 },
+      { ...ex('2', 1000, 'a', 'cash', '2026-12-01T13:00:00+09:00'), currency: 'USD' }, // 古い支出（レートなし）は今のレート
+    ];
+    expect(summarize(list, 'group', 'a', 'JPY', usd).total).toBe(4500 + 1600);
+    expect(myTotal(usd, list)).toBe(1500 + 534); // 3人で割る：$10 → $3.34（端数は払った人）× 160
+    // 現地通貨で見るときはそのまま
+    expect(summarize(list, 'group', 'a', 'USD', usd).total).toBe(4000);
+  });
 });
 
 import { forecast, plannedItems } from './money';

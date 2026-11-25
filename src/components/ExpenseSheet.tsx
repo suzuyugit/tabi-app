@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { Expense, PaymentMethod, RoundMode, Trip } from '../db/types';
-import { deleteExpense, lastPaymentMethod, saveExpense, type ExpenseInput } from '../db/expenseRepo';
+import { deleteExpense, lastPaymentMethod, rateToRecord, saveExpense, type ExpenseInput } from '../db/expenseRepo';
 import { inputToIso, isoToInput, nowIso } from '../lib/datetime';
 import { byOrder, nearestItem, tripDays } from '../lib/itinerary';
 import { hasTimeDiff, nowWall } from '../lib/timezone';
 import { formatMd } from '../lib/date';
-import { convert, currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
-import { expenseCurrency } from '../lib/money';
+import { currencyInfo, formatMoney, isForeign, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
+import { convertExpense, expenseCurrency } from '../lib/money';
 import { PAYMENT_LABEL, PAYMENT_METHODS, ROUND_MODE_LABEL, roundTo, roundUnitsFor, sharesOf, validateExpense } from '../lib/split';
 import { Sheet } from './Sheet';
 import { IconNameSheet } from './IconNameSheet';
@@ -253,7 +253,7 @@ export function ExpenseSheet({ trip, expense, onClose }: Props) {
         </div>
         {foreign && amountOk && amountNum > 0 && (
           <div className="converted">
-            ≈ {formatMoney(convert(amountNum, currency, currency === JPY ? local : JPY, trip), currency === JPY ? local : JPY)}
+            ≈ {formatMoney(convertExpense(amountNum, { currency, rateAtRecord: rateToRecord({ currency }, expense, trip.rate) }, currency === JPY ? local : JPY, trip), currency === JPY ? local : JPY)}
           </div>
         )}
 

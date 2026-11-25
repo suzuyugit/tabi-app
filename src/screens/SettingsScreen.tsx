@@ -9,6 +9,7 @@ import { navigate } from '../router';
 import { encodePayload, parsePayload } from '../lib/share';
 import { showToast } from '../components/Toast';
 import { BackupSection } from '../components/BackupSection';
+import { KakeiboSection } from '../components/KakeiboSection';
 import { OpenShareSheet } from '../components/OpenShareSheet';
 
 type Editing = { mode: 'category'; target?: Category } | { mode: 'kind'; target?: ItemKindDef } | null;
@@ -85,6 +86,8 @@ export function SettingsScreen() {
             🎒 持ち物リストを開く（{lists?.length ?? 0}件）
           </button>
         </section>
+
+        <KakeiboSection />
 
         <BackupSection />
 

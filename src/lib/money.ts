@@ -17,9 +17,24 @@ export function valueOf(e: Expense, mode: ViewMode, meId: string): number {
   return mode === 'group' ? e.amount : shareOf(e, meId);
 }
 
+/**
+ * その支出の金額（支払った通貨の最小単位）を別の通貨に換算する。
+ * 現地通貨の支出は、記録したときのレート（rateAtRecord）で換算する（なければ旅行の今のレート）
+ */
+export function convertExpense(
+  minor: number,
+  e: Pick<Expense, 'currency' | 'rateAtRecord'>,
+  to: string,
+  trip: Pick<Trip, 'currency' | 'rate'>,
+): number {
+  const from = expenseCurrency(e);
+  const rate = from !== JPY && e.rateAtRecord && e.rateAtRecord > 0 ? e.rateAtRecord : trip.rate;
+  return convert(minor, from, to, { currency: trip.currency, rate });
+}
+
 /** 表示モードでの、その支出の額を表示通貨に換算したもの */
 export function valueIn(e: Expense, mode: ViewMode, meId: string, display: string, trip: TripMoney): number {
-  return convert(valueOf(e, mode, meId), expenseCurrency(e), display, trip);
+  return convertExpense(valueOf(e, mode, meId), e, display, trip);
 }
 
 export type MoneySummary = {
@@ -53,7 +68,7 @@ export function summarize(
 export function myTotal(trip: TripMoney, expenses: Expense[]): number {
   const me = trip.members.find((m) => m.isMe)?.id;
   if (!me) return 0;
-  return expenses.reduce((a, e) => a + convert(shareOf(e, me), expenseCurrency(e), JPY, trip), 0);
+  return expenses.reduce((a, e) => a + convertExpense(shareOf(e, me), e, JPY, trip), 0);
 }
 
 /**

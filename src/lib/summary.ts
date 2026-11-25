@@ -1,8 +1,8 @@
 // 旅行のまとめ（SPEC「便利機能」）
 import type { Expense, Repayment, Trip } from '../db/types';
-import { convert, JPY } from './currency';
+import { JPY } from './currency';
 import { dayCount } from './date';
-import { expenseCurrency, myTotal, summarize } from './money';
+import { convertExpense, myTotal, summarize } from './money';
 import { settlementForTrip, settleCurrencyOf } from './settlement';
 
 export type TripSummary = {
@@ -21,7 +21,7 @@ export type TripSummary = {
 export function summarizeTrip(trip: Trip, expenses: Expense[], repayments: Repayment[]): TripSummary {
   const me = trip.members.find((m) => m.isMe)?.id ?? '';
   const days = Math.max(1, dayCount(trip.startDate, trip.endDate));
-  const yenOf = (e: Expense) => convert(e.amount, expenseCurrency(e), JPY, trip);
+  const yenOf = (e: Expense) => convertExpense(e.amount, e, JPY, trip);
   const total = expenses.reduce((a, e) => a + yenOf(e), 0);
   const mine = myTotal(trip, expenses);
   const cat = summarize(expenses, 'me', me, JPY, trip).byCategory;

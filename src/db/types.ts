@@ -88,6 +88,8 @@ export type Expense = {
   tripId: string;
   amount: number; // currency の最小単位（円なら円、ドルならセント）
   currency?: string; // 支払った通貨。未設定なら円
+  /** 記録したときのレート（1現地通貨 = ○円）。現地通貨の支出だけ。あとで Trip.rate を変えても、使った額の円換算はこれを使う */
+  rateAtRecord?: number;
   categoryId: string;
   paymentMethod: PaymentMethod;
   memo?: string;

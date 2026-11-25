@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { Category, Expense, Trip } from '../../db/types';
-import { cashRemaining, estimateIn, expenseCurrency, forecast, plannedItems, summarize, valueIn } from '../../lib/money';
+import { cashRemaining, convertExpense, estimateIn, expenseCurrency, forecast, plannedItems, summarize, valueIn } from '../../lib/money';
 import { convert, formatMoney, isForeign, JPY, tripCurrency } from '../../lib/currency';
 import { isoDate, isoTime } from '../../lib/datetime';
 import { formatMd } from '../../lib/date';
@@ -421,7 +421,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
                       {foreign && (
                         // 払った通貨ともう片方の通貨の両方を出す
                         <span className="expense-conv">
-                          ≈ {formatMoney(convert(e.amount, cur, cur === JPY ? local : JPY, trip), cur === JPY ? local : JPY)}
+                          ≈ {formatMoney(convertExpense(e.amount, e, cur === JPY ? local : JPY, trip), cur === JPY ? local : JPY)}
                         </span>
                       )}
                       <span className="expense-mine">自分 {fmt(valueIn(e, 'me', meId, display, trip))}</span>
