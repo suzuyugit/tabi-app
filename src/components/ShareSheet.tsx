@@ -15,6 +15,9 @@ export function ShareSheet({ trip, onClose }: Props) {
   // 旅程を見せる相手：一緒に行く人 / ほかの人（親・参考にしたい人）
   const [toOthers, setToOthers] = useState(false);
   const [others, setOthers] = useState<OthersOptions>({ reservations: false, costs: true, memos: true });
+  // 一緒に行く人に旅程を送るとき、割り勘・持ち物もまとめて送る
+  const [withSettle, setWithSettle] = useState(false);
+  const [withPacking, setWithPacking] = useState(false);
   const data = useLiveQuery(async () => {
     const [items, kinds, expenses, categories, repayments, packing] = await Promise.all([
       db.itineraryItems.where('tripId').equals(trip.id).toArray(),
@@ -32,7 +35,9 @@ export function ShareSheet({ trip, onClose }: Props) {
   const payload =
     kind === 'packing'
       ? buildListPayload(listName.trim() || `${trip.name}の持ち物`, packingNames(data.packing))
-      : buildPayload(kind, trip, data, undefined, kind === 'itinerary' && toOthers ? others : undefined);
+      : kind === 'itinerary' && toOthers
+        ? buildPayload(kind, trip, data, undefined, others)
+        : buildPayload(kind, trip, data, undefined, undefined, kind === 'itinerary' ? { settle: withSettle, packing: withPacking ? data.packing : undefined } : undefined);
   const fileBase = `${kind}${kind === 'itinerary' && toOthers ? '-view' : ''}-${trip.startDate.replace(/-/g, '')}`;
   const title = `${trip.name}の${{ itinerary: '旅程', settle: '割り勘', packing: '持ち物' }[kind]}`;
   const sharedCount = data.expenses.filter((e) => !isPersonal(e)).length;
@@ -103,7 +108,11 @@ export function ShareSheet({ trip, onClose }: Props) {
           <ul>
             <li>旅行名・日程・メンバー（{trip.members.map((m) => m.name).join('・')}）</li>
             {kind === 'itinerary' ? (
-              <li>予定 {data.items.length}件</li>
+              <>
+                <li>予定 {data.items.length}件</li>
+                {withSettle && <li>割り勘した支出 {sharedCount}件{data.repayments.length > 0 ? `・渡したお金の記録 ${data.repayments.length}件` : ''}</li>}
+                {withPacking && <li>持ち物 {data.packing.length}個の名前（受け取った人の持ち物に、ないものだけ追加されます）</li>}
+              </>
             ) : (
               <>
                 <li>割り勘した支出 {sharedCount}件（精算表は受け取った側で計算）</li>
@@ -111,8 +120,23 @@ export function ShareSheet({ trip, onClose }: Props) {
               </>
             )}
           </ul>
+          {kind === 'itinerary' && (
+            <>
+              <div className="card-label">一緒に送る</div>
+              <label className="mini-check share-opt">
+                <input type="checkbox" checked={withSettle} onChange={(e) => setWithSettle(e.target.checked)} />
+                🤝 割り勘（{sharedCount}件）
+              </label>
+              <label className="mini-check share-opt">
+                <input type="checkbox" checked={withPacking} onChange={(e) => setWithPacking(e.target.checked)} />
+                🎒 持ち物（{data.packing.length}個）
+              </label>
+            </>
+          )}
           <div className="card-label">送らないもの</div>
-          <p className="muted small">予算・手持ち現金・個人の支出・持ち物</p>
+          <p className="muted small">
+            予算・手持ち現金・個人の支出{kind === 'itinerary' && withPacking ? '・持ち物のチェックの状態' : '・持ち物'}
+          </p>
         </div>
         )}
         </>

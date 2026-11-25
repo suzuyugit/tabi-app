@@ -196,7 +196,8 @@ function TripShareView({ payload }: { payload: TripPayload }) {
         <div className="header-title">
           <h1>{trip.name}</h1>
           <div className="sub">
-            共有された{payload.kind === 'itinerary' ? '旅程' : '割り勘'}（読むだけ）・{formatMd(isoDate(payload.sharedAt))}時点
+            共有された{payload.kind === 'itinerary' ? ['旅程', ...(payload.with ?? []).map((w) => (w === 'settle' ? '割り勘' : '持ち物'))].join('・') : '割り勘'}（読むだけ）・
+            {formatMd(isoDate(payload.sharedAt))}時点
           </div>
         </div>
       </header>
@@ -207,10 +208,27 @@ function TripShareView({ payload }: { payload: TripPayload }) {
           <div className="muted small">メンバー：{trip.members.map((m) => m.name).join('・')}</div>
         </section>
 
-        {payload.kind === 'itinerary' ? (
-          <SharedItinerary trip={trip} items={(payload.items ?? []) as ItineraryItem[]} kinds={payload.kinds} />
-        ) : (
-          <SharedSettle trip={trip} expenses={(payload.expenses ?? []) as Expense[]} payload={payload} nameOf={nameOf} />
+        {payload.kind === 'itinerary' && (
+          <>
+            {(payload.with?.length ?? 0) > 0 && <h3 className="section-title">🗓️ 旅程</h3>}
+            <SharedItinerary trip={trip} items={(payload.items ?? []) as ItineraryItem[]} kinds={payload.kinds} />
+          </>
+        )}
+        {(payload.kind === 'settle' || payload.with?.includes('settle')) && (
+          <>
+            {payload.kind === 'itinerary' && <h3 className="section-title">🤝 割り勘</h3>}
+            <SharedSettle trip={trip} expenses={(payload.expenses ?? []) as Expense[]} payload={payload} nameOf={nameOf} />
+          </>
+        )}
+        {payload.with?.includes('packing') && (
+          <section className="card">
+            <h3 className="card-title">🎒 持ち物（{payload.packing?.length ?? 0}個）</h3>
+            <ul className="shared-packing">
+              {(payload.packing ?? []).map((x, i) => (
+                <li key={i}>☐ {x}</li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <section className="card import-card">
@@ -229,6 +247,7 @@ function TripShareView({ payload }: { payload: TripPayload }) {
             {existing
               ? `このスマホにある「${existing.name}」を上書きします（予算・手持ち現金・自分の個人の支出・持ち物は残ります）。`
               : '新しい旅行として保存します。'}
+            {payload.with?.includes('packing') && '持ち物は、このスマホにないものだけ追加します。'}
           </p>
           <button type="button" className="btn btn-primary btn-block" onClick={doImport} disabled={busy || !me}>
             {existing ? '上書きして取り込む' : '取り込む'}

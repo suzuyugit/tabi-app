@@ -18,6 +18,10 @@ export type TripPayload = {
   sharedAt: string;
   /** 'others' = 一緒に行かない人（親・参考にしたい人）に見せる旅程。メンバーは入れない */
   audience?: 'others';
+  /** 旅程と一緒に送ったもの（割り勘・持ち物）。kind が 'itinerary' のときだけ */
+  with?: ('settle' | 'packing')[];
+  /** 一緒に送った持ち物（名前だけ） */
+  packing?: string[];
   trip: SharedTrip;
   items?: Omit<ItineraryItem, 'tripId'>[];
   kinds?: ItemKindDef[];
@@ -56,6 +60,7 @@ export function buildPayload(
   data: { items: ItineraryItem[]; kinds: ItemKindDef[]; expenses: Expense[]; categories: Category[]; repayments: Repayment[] },
   now = new Date().toISOString(),
   others?: OthersOptions,
+  extras?: { settle?: boolean; packing?: PackingItem[] },
 ): TripPayload {
   const t: SharedTrip = {
     id: trip.id,
@@ -102,7 +107,7 @@ export function buildPayload(
   }
   if (kind === 'itinerary') {
     const used = new Set(data.items.map((i) => i.kind));
-    return {
+    const p: TripPayload = {
       v: 1,
       kind,
       sharedAt: now,
@@ -110,6 +115,19 @@ export function buildPayload(
       items: data.items.map(strip),
       kinds: data.kinds.filter((k) => used.has(k.id)),
     };
+    // 一緒に行く人には、割り勘と持ち物もまとめて送れる
+    const withParts: ('settle' | 'packing')[] = [];
+    if (extras?.settle) {
+      const s = buildPayload('settle', trip, data, now);
+      Object.assign(p, { expenses: s.expenses, categories: s.categories, repayments: s.repayments });
+      withParts.push('settle');
+    }
+    if (extras?.packing) {
+      p.packing = packingNames(extras.packing);
+      withParts.push('packing');
+    }
+    if (withParts.length > 0) p.with = withParts;
+    return p;
   }
   // 割り勘：割り勘した支出だけ（個人の支出は入れない）
   const shared = data.expenses.filter((e) => !isPersonal(e));
