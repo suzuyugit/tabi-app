@@ -196,3 +196,14 @@ export function decodePayload(encoded: string): SharePayload | undefined {
 export function shareUrl(p: SharePayload, base = `${location.origin}${location.pathname}`): string {
   return `${base}${SHARE_PREFIX}${encodePayload(p)}`;
 }
+
+/**
+ * 貼り付けた文字から共有リンクの中身を取り出す。LINE のメッセージをまるごと貼っても、
+ * 中の「#share=…」を探す。リンクの文字列だけ（#share= なし）でもよい
+ */
+export function extractShareData(text: string): string | undefined {
+  const t = text.trim();
+  const m = t.match(/#share=([^\s"'<>]+)/);
+  const data = m ? m[1] : /^[A-Za-z0-9+\-$]+$/.test(t) ? t : undefined;
+  return data && decodePayload(data) ? data : undefined;
+}

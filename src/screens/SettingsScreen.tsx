@@ -9,6 +9,7 @@ import { navigate } from '../router';
 import { encodePayload, parsePayload } from '../lib/share';
 import { showToast } from '../components/Toast';
 import { BackupSection } from '../components/BackupSection';
+import { OpenShareSheet } from '../components/OpenShareSheet';
 
 type Editing = { mode: 'category'; target?: Category } | { mode: 'kind'; target?: ItemKindDef } | null;
 
@@ -16,6 +17,7 @@ export function SettingsScreen() {
   const categories = useCategories();
   const kinds = useItemKinds();
   const [editing, setEditing] = useState<Editing>(null);
+  const [opening, setOpening] = useState(false);
   const lists = useLiveQuery(() => db.packingLists.orderBy('name').toArray());
   // カテゴリは ID 順（最初から入っている順 → 足した順）で並べる
   const cats = [...(categories ?? [])].sort((a, b) => a.id.localeCompare(b.id));
@@ -87,10 +89,13 @@ export function SettingsScreen() {
         <BackupSection />
 
         <section className="card">
-          <h3 className="card-title">共有ファイルを開く</h3>
-          <p className="muted small">リンクが長すぎて JSON ファイルで送られてきた旅程・割り勘・持ち物リストを読み込みます。</p>
+          <h3 className="card-title">共有を開く</h3>
+          <button type="button" className="btn btn-primary btn-block" onClick={() => setOpening(true)}>
+            🔗 共有リンクを貼り付けて開く
+          </button>
+          <p className="muted small">リンクが長すぎて JSON ファイルで送られてきたときは、こちらから読み込みます。</p>
           <label className="btn btn-ghost btn-block file-btn">
-            📄 ファイルを選ぶ
+            📄 共有ファイルを選ぶ
             <input
               type="file"
               accept=".json,application/json"
@@ -112,6 +117,7 @@ export function SettingsScreen() {
       </main>
 
       {editing?.mode === 'category' && <IconNameSheet mode="category" target={editing.target} onClose={() => setEditing(null)} />}
+      {opening && <OpenShareSheet onClose={() => setOpening(false)} />}
       {editing?.mode === 'kind' && <IconNameSheet mode="kind" target={editing.target} onClose={() => setEditing(null)} />}
     </div>
   );

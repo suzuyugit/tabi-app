@@ -10,7 +10,11 @@ export function shareActions(payload: SharePayload, title: string, fileBase: str
   const shareLink = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title, text: `${title}（たびメモ）`, url });
+        await navigator.share({
+          title,
+          text: `${title}（たびメモ）\nホーム画面のたびメモで開くときは、リンクをコピーして「🔗 共有リンクを貼り付けて開く」へ`,
+          url,
+        });
         return;
       } catch (e) {
         if ((e as Error).name === 'AbortError') return; // 共有メニューを閉じただけ

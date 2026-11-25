@@ -4,10 +4,13 @@ import { navigate } from '../router';
 import { formatRange, formatYen } from '../lib/date';
 import { sortTrips, tripStatus, type TripStatus } from '../lib/trips';
 import { forecast, myTotal } from '../lib/money';
+import { useState } from 'react';
+import { OpenShareSheet } from '../components/OpenShareSheet';
 
 const STATUS_LABEL: Record<TripStatus, string> = { ongoing: '旅行中', upcoming: 'これから', past: '終わった旅行' };
 
 export function TripListScreen() {
+  const [opening, setOpening] = useState(false);
   const data = useLiveQuery(async () => {
     const [trips, expenses, items, kinds] = await Promise.all([
       db.trips.toArray(),
@@ -100,7 +103,11 @@ export function TripListScreen() {
         <button className="btn btn-primary btn-block" onClick={() => navigate({ name: 'newTrip' })}>
           ＋新しい旅行
         </button>
+        <button className="btn btn-ghost btn-block open-share-btn" onClick={() => setOpening(true)}>
+          🔗 共有リンクを貼り付けて開く
+        </button>
       </footer>
+      {opening && <OpenShareSheet onClose={() => setOpening(false)} />}
     </div>
   );
 }

@@ -124,3 +124,17 @@ describe('共有リンク', () => {
     expect(buildPayload('itinerary', trip, data).with).toBeUndefined();
   });
 });
+
+describe('貼り付けたリンクから開く', () => {
+  it('LINE のメッセージごと貼っても、リンクの中身を取り出す', async () => {
+    const { extractShareData } = await import('./share');
+    const p = buildListPayload('セット', ['傘']);
+    const url = shareUrl(p, 'https://suzuyugit.github.io/tabi-app/');
+    const data = url.split('#share=')[1];
+    expect(extractShareData(url)).toBe(data);
+    expect(extractShareData(`京都の持ち物（たびメモ） ${url}\nよろしく！`)).toBe(data);
+    expect(extractShareData(data)).toBe(data);
+    expect(extractShareData('https://example.com/')).toBeUndefined();
+    expect(extractShareData(`${url.slice(0, -10)}`)).toBeUndefined(); // 途中で切れたリンク
+  });
+});
