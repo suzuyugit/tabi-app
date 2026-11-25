@@ -15,6 +15,7 @@ export type Trip = {
   timeZone?: string; // 現地の時間帯（IANA 名。例：Pacific/Honolulu）。未設定なら日本時間
   settleCurrency?: string; // 精算する通貨（円か現地通貨）。未設定なら円
   plan?: PlanLine[]; // 見積もりプラン（予算の内訳。自分の分）
+  dayPlaces?: Record<string, string>; // 日ごとの「その日いる場所」を自分で決めたもの（日付 → 例：札幌）
   settleRound?: number; // ざっくり精算：精算表の額をこの単位（精算する通貨の最小単位）で四捨五入。0 / 未設定ならそのまま
   createdAt: string;
 };
@@ -26,7 +27,8 @@ export type PlanLine = {
   amount: number; // currency の最小単位（1単位あたり）
   currency?: string; // 未設定なら円
   unit: 'day' | 'night' | 'time' | 'once'; // 1日あたり・1泊あたり・1回あたり・一括
-  count: number; // 何日・何泊・何回（一括は 1）
+  count: number; // 何日・何泊・何回（一括は 1）。日付を選んだ「1日／1泊あたり」は選んだ日数
+  dates?: string[]; // 何月何日の費用か（複数可）
   memo?: string;
 };
 

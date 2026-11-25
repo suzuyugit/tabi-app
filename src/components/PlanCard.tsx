@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { db } from '../db/db';
 import type { Category, PlanLine, Trip } from '../db/types';
 import { convert, formatMoney, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
-import { defaultCount, lineAmount, lineIn, PLAN_UNITS, planByCategory, planTotal, unitMeta } from '../lib/plan';
+import { datesLabel, defaultCount, lineAmount, lineIn, PLAN_UNITS, planByCategory, planTotal, unitMeta } from '../lib/plan';
+import { tripDays } from '../lib/itinerary';
+import { useDayPlaces } from '../hooks/useDayPlaces';
 import { newId } from '../lib/id';
 import { useCategories } from '../hooks/useKinds';
 import { MoneyField } from './MoneyField';
@@ -58,6 +60,7 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
                     </span>
                     <span className="plan-formula muted small">
                       {l.unit === 'once' ? '一括' : `${u.per} ${formatMoney(l.amount, cur)} × ${l.count}${u.count}`}
+                      {l.dates && l.dates.length > 0 && <span className="plan-dates">📅 {datesLabel(l.dates)}</span>}
                     </span>
                     <span className="plan-amount">
                       {fmt(lineIn(l, display, trip))}
@@ -127,9 +130,16 @@ function PlanLineSheet({ trip, line, onClose }: { trip: Trip; line?: PlanLine; o
   const [unit, setUnit] = useState<PlanLine['unit']>(line?.unit ?? 'day');
   const [count, setCount] = useState(String(line?.count ?? defaultCount('day', trip)));
   const [memo, setMemo] = useState(line?.memo ?? '');
+  const [dates, setDates] = useState<string[]>(line?.dates ?? []);
+  const places = useDayPlaces(trip);
+  // 1泊あたりは泊まる夜（最終日を除く）、それ以外は旅行の全部の日
+  const allDays = tripDays(trip);
+  const dayChoices = unit === 'night' && allDays.length > 1 ? allDays.slice(0, -1) : allDays;
+  const byDates = (unit === 'day' || unit === 'night') && dates.length > 0; // 選んだ日数を回数にする
+  const toggleDate = (d: string) => setDates((ds) => (ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d].sort()));
   const [error, setError] = useState('');
   const amountNum = parseMoneyInput(amount, currency);
-  const countNum = Number(count);
+  const countNum = byDates ? dates.length : Number(count);
   const ok = amountNum !== undefined && !Number.isNaN(amountNum) && amountNum > 0;
   const preview = ok ? lineAmount({ amount: amountNum, unit, count: unit === 'once' ? 1 : countNum || 0 }) : 0;
 
@@ -144,6 +154,7 @@ function PlanLineSheet({ trip, line, onClose }: { trip: Trip; line?: PlanLine; o
       currency: currency === JPY ? undefined : currency,
       unit,
       count: unit === 'once' ? 1 : countNum,
+      dates: dates.length > 0 ? dates : undefined,
       memo: memo.trim() || undefined,
     };
     const lines = trip.plan ?? [];
@@ -209,6 +220,8 @@ function PlanLineSheet({ trip, line, onClose }: { trip: Trip; line?: PlanLine; o
                 onClick={() => {
                   setUnit(u.key);
                   if (u.key !== 'once') setCount(String(defaultCount(u.key, trip)));
+                  // 1泊あたりに最終日の夜はないので外す
+                  if (u.key === 'night') setDates((ds) => ds.filter((d) => d !== trip.endDate || trip.startDate === trip.endDate));
                 }}
               >
                 {u.label}
@@ -228,7 +241,37 @@ function PlanLineSheet({ trip, line, onClose }: { trip: Trip; line?: PlanLine; o
           onCurrencyChange={setCurrency}
           placeholder="例：5000"
         />
-        {unit !== 'once' && (
+        <div className="field">
+          <div className="label-row">
+            <span className="label">何月何日の費用か（任意・複数選べます）</span>
+            {dates.length > 0 && (
+              <button type="button" className="btn-text" onClick={() => setDates([])}>
+                選択を外す
+              </button>
+            )}
+          </div>
+          <div className="date-chips" role="group" aria-label="日付">
+            {dayChoices.map((d) => (
+              <button
+                key={d.date}
+                type="button"
+                aria-pressed={dates.includes(d.date)}
+                className={`date-chip ${dates.includes(d.date) ? 'active' : ''}`}
+                onClick={() => toggleDate(d.date)}
+              >
+                <span className="date-chip-day">{d.sub}</span>
+                {places.get(d.date) && <span className="date-chip-place">{places.get(d.date)}</span>}
+              </button>
+            ))}
+          </div>
+          {byDates && (
+            <span className="hint">
+              選んだ {dates.length}
+              {unitMeta(unit).count}分で計算します
+            </span>
+          )}
+        </div>
+        {unit !== 'once' && !byDates && (
           <label className="field">
             <span className="label">{unitMeta(unit).count}数</span>
             <div className="count-row">

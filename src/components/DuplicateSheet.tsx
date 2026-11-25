@@ -3,6 +3,7 @@ import type { ItineraryItem, Trip } from '../db/types';
 import { duplicateItem } from '../db/itineraryRepo';
 import { tripDays } from '../lib/itinerary';
 import { Sheet } from './Sheet';
+import { useDayPlaces } from '../hooks/useDayPlaces';
 import { showToast } from './Toast';
 
 type Props = { trip: Trip; item: ItineraryItem; onClose: () => void };
@@ -11,6 +12,7 @@ type Props = { trip: Trip; item: ItineraryItem; onClose: () => void };
 export function DuplicateSheet({ trip, item, onClose }: Props) {
   const days = tripDays(trip).filter((d) => d.date !== item.date);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const places = useDayPlaces(trip);
 
   const toggle = (date: string) =>
     setSelected((s) => {
@@ -57,6 +59,7 @@ export function DuplicateSheet({ trip, item, onClose }: Props) {
                 <input type="checkbox" checked={selected.has(d.date)} onChange={() => toggle(d.date)} />
                 <span>
                   {d.label} <span className="muted">{d.sub}</span>
+                  {places.get(d.date) && <span className="place-tag">📍{places.get(d.date)}</span>}
                 </span>
               </label>
             </li>

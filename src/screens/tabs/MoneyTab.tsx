@@ -9,6 +9,8 @@ import { formatMd } from '../../lib/date';
 import { tripDays } from '../../lib/itinerary';
 import { PAYMENT_LABEL } from '../../lib/split';
 import { PlanCard } from '../../components/PlanCard';
+import { useDayPlaces } from '../../hooks/useDayPlaces';
+import { withPlace } from '../../lib/location';
 import { deleteExpense } from '../../db/expenseRepo';
 import { SwipeToDelete } from '../../components/SwipeToDelete';
 import { showToast } from '../../components/Toast';
@@ -40,6 +42,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const [showYen, setShowYenState] = useState(() => load(CUR_KEY) === 'JPY');
   const [dayFilter, setDayFilter] = useState('');
   const [catFilter, setCatFilter] = useState('');
+  const dayPlaces = useDayPlaces(trip);
   const meId = trip.members.find((m) => m.isMe)?.id ?? '';
   const local = tripCurrency(trip);
   const foreign = isForeign(trip);
@@ -97,8 +100,8 @@ export function MoneyTab({ trip, onEdit }: Props) {
   const dayKeys = new Set(days.map((d) => d.date));
   const extraDays = [...summary.byDay.keys()].filter((d) => !dayKeys.has(d)).sort();
   const dayRows = [
-    ...days.map((d) => ({ date: d.date, label: d.label, sub: d.sub })),
-    ...extraDays.map((d) => ({ date: d, label: '日程外', sub: formatMd(d) })),
+    ...days.map((d) => ({ date: d.date, label: d.label, sub: d.sub, place: dayPlaces.get(d.date) })),
+    ...extraDays.map((d) => ({ date: d, label: '日程外', sub: formatMd(d), place: undefined as string | undefined })),
   ].map((d) => ({ ...d, value: summary.byDay.get(d.date) ?? 0, planned: fc.plannedByDay.get(d.date) ?? 0 }));
   const dayMax = Math.max(1, ...dayRows.map((r) => r.value + r.planned));
 
@@ -286,7 +289,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
           {dayRows.map((r) => (
             <li key={r.date} className="hbar-row">
               <span className="hbar-label">
-                {r.label} <span className="muted small">{r.sub}</span>
+                {r.label} <span className="muted small">{r.place ?? r.sub}</span>
               </span>
               <span className="hbar-track">
                 {r.value > 0 && <span className="hbar-fill" style={{ width: `${(r.value / dayMax) * 100}%` }} />}
@@ -365,7 +368,7 @@ export function MoneyTab({ trip, onEdit }: Props) {
             <option value="">すべての日</option>
             {dayRows.map((d) => (
               <option key={d.date} value={d.date}>
-                {d.label} {d.sub}
+                {withPlace(`${d.label} ${d.sub}`, d.place)}
               </option>
             ))}
           </select>

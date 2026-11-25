@@ -14,6 +14,8 @@ import { useLongPressReorder } from '../../hooks/useLongPressReorder';
 import { KindsContext, useItemKinds, useKindsContext } from '../../hooks/useKinds';
 import { ItemSheet } from '../../components/ItemSheet';
 import { TodayPanel } from '../../components/TodayPanel';
+import { DayPlaceSheet } from '../../components/DayPlaceSheet';
+import { dayLocations } from '../../lib/location';
 import { DuplicateSheet } from '../../components/DuplicateSheet';
 import { Sheet } from '../../components/Sheet';
 import { showToast } from '../../components/Toast';
@@ -25,6 +27,7 @@ type Props = { trip: Trip };
 export function ItineraryTab({ trip }: Props) {
   const days = useMemo(() => tripDays(trip), [trip]);
   const kinds = useItemKinds();
+  const [editingPlace, setEditingPlace] = useState(false);
   const [selected, setSelected] = useState(() => {
     // 旅行中は今日（現地の日付）のタブを最初に開く
     const today = nowWall(trip).date;
@@ -50,6 +53,9 @@ export function ItineraryTab({ trip }: Props) {
   }, [trip]);
 
   const dayDates = new Set(days.map((d) => d.date));
+  // その日いる場所（自分で決めた場所が優先）と、旅程だけから決めた場所
+  const places = dayLocations(trip, data?.items ?? []);
+  const autoPlaces = dayLocations({ ...trip, dayPlaces: undefined }, data?.items ?? []);
   const outsideItems = (data?.items ?? []).filter((it) => !dayDates.has(it.date));
   // 旅行の日程を縮めたなどで、選んでいた日がなくなったとき
   const current = selected === OUTSIDE || dayDates.has(selected) ? selected : (days[0]?.date ?? OUTSIDE);
@@ -138,6 +144,7 @@ export function ItineraryTab({ trip }: Props) {
               {d.sub}
               {d.date === today && ' 今日'}
             </span>
+            {places.get(d.date) && <span className="day-tab-place">📍{places.get(d.date)}</span>}
           </button>
         ))}
         {outsideItems.length > 0 && (
@@ -147,6 +154,17 @@ export function ItineraryTab({ trip }: Props) {
           </button>
         )}
       </nav>
+
+      {current !== OUTSIDE && (
+        <button type="button" className="day-place" onClick={() => setEditingPlace(true)}>
+          📍 {places.get(current) ?? 'この日の場所を設定'}
+          {trip.dayPlaces?.[current] ? '' : places.get(current) ? <span className="muted small">（旅程から）</span> : null}
+          <span className="muted small">✎</span>
+        </button>
+      )}
+      {editingPlace && current !== OUTSIDE && (
+        <DayPlaceSheet trip={trip} date={current} auto={autoPlaces.get(current)} onClose={() => setEditingPlace(false)} />
+      )}
 
       {current === today && <TodayPanel trip={trip} dayItems={list} />}
 

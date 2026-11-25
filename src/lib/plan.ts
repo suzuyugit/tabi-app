@@ -2,6 +2,7 @@
 import type { PlanLine, Trip } from '../db/types';
 import { convert, JPY } from './currency';
 import { dayCount } from './date';
+import { addDays } from './itinerary';
 
 export const PLAN_UNITS: { key: PlanLine['unit']; label: string; per: string; count: string }[] = [
   { key: 'day', label: '1日あたり', per: '1日', count: '日' },
@@ -41,4 +42,18 @@ export function planByCategory(lines: PlanLine[], display: string, trip: Pick<Tr
   const m = new Map<string, number>();
   for (const l of lines) m.set(l.categoryId, (m.get(l.categoryId) ?? 0) + lineIn(l, display, trip));
   return m;
+}
+
+/** 日付の一覧を短く：「11/25〜11/27・11/29」（続いている日はまとめる） */
+export function datesLabel(dates: string[]): string {
+  const sorted = [...new Set(dates)].sort();
+  const parts: string[] = [];
+  const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  for (let i = 0; i < sorted.length; ) {
+    let j = i;
+    while (j + 1 < sorted.length && addDays(sorted[j], 1) === sorted[j + 1]) j++;
+    parts.push(j === i ? md(sorted[i]) : `${md(sorted[i])}〜${md(sorted[j])}`);
+    i = j + 1;
+  }
+  return parts.join('・');
 }

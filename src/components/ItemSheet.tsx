@@ -4,6 +4,8 @@ import { createItem, deleteItem, updateItem, type ItemInput } from '../db/itiner
 import { db } from '../db/db';
 import { addDays, daysBetween, fallbackTitle, normalizeUrl, TRANSPORTS, tripDays } from '../lib/itinerary';
 import { useItemKinds } from '../hooks/useKinds';
+import { useDayPlaces } from '../hooks/useDayPlaces';
+import { withPlace } from '../lib/location';
 import { IconNameSheet } from './IconNameSheet';
 import { hasTimeDiff, otherZoneTime, wallToMs, zoneOf, type ZoneSide } from '../lib/timezone';
 import { formatMd } from '../lib/date';
@@ -36,6 +38,7 @@ const TITLE_PLACEHOLDER: Record<string, string> = {
 export function ItemSheet({ trip, item, defaultDate, onClose, onDuplicate }: Props) {
   const [kind, setKind] = useState<ItemKind>(item?.kind ?? 'other');
   const kinds = useItemKinds();
+  const dayPlaces = useDayPlaces(trip);
   const [addingKind, setAddingKind] = useState(false);
   const [transport, setTransport] = useState<Transport>(item?.transport ?? 'train');
   const [date, setDate] = useState(item?.date ?? defaultDate);
@@ -73,7 +76,7 @@ export function ItemSheet({ trip, item, defaultDate, onClose, onDuplicate }: Pro
   const isStay = kind === 'stay';
   const timeLabel = isMove ? '出発時刻' : isStay ? 'チェックイン' : '時刻';
   const days = tripDays(trip);
-  const dateOptions = days.map((d) => ({ value: d.date, label: `${d.label}  ${d.sub}` }));
+  const dateOptions = days.map((d) => ({ value: d.date, label: withPlace(`${d.label}  ${d.sub}`, dayPlaces.get(d.date)) }));
   if (!days.some((d) => d.date === date)) dateOptions.push({ value: date, label: `日程外  ${formatMd(date)}` });
 
   const setPlaceAt = (i: number, v: string) => setPlaces((ps) => ps.map((p, j) => (j === i ? v : p)));

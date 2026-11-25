@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCount, lineAmount, planByCategory, planTotal } from './plan';
+import { datesLabel, defaultCount, lineAmount, planByCategory, planTotal } from './plan';
 import type { PlanLine } from '../db/types';
 
 const trip = { startDate: '2026-12-01', endDate: '2026-12-05', currency: 'USD', rate: 150 };
@@ -22,5 +22,11 @@ describe('見積もりプラン', () => {
     expect(lineAmount({ amount: 9000, unit: 'once', count: 3 })).toBe(9000); // 一括は回数を見ない
     expect(planTotal(lines, 'JPY', trip)).toBe(25000 + 10000 + 32000 + 4500);
     expect(planByCategory(lines, 'JPY', trip).get('food')).toBe(25000 + 4500);
+  });
+
+  it('日付の表示：続く日はまとめる', () => {
+    expect(datesLabel(['2026-11-27', '2026-11-25', '2026-11-26', '2026-11-29'])).toBe('11/25〜11/27・11/29');
+    expect(datesLabel(['2026-12-31', '2027-01-01'])).toBe('12/31〜1/1');
+    expect(datesLabel([])).toBe('');
   });
 });
