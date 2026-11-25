@@ -16,6 +16,7 @@ import { isoDate } from '../lib/datetime';
 import { sortTrips } from '../lib/trips';
 import { navigate } from '../router';
 import { showToast } from '../components/Toast';
+import { SaveAsFields, useSaveAs } from '../components/SaveAsFields';
 
 type Props = { data: string };
 
@@ -121,15 +122,17 @@ function PackingShareView({ payload }: { payload: ListPayload }) {
 
 /** 一緒に行かない人（親・参考にしたい人）に送られた旅程 */
 function ViewerShareView({ payload }: { payload: TripPayload }) {
-  const existing = useLiveQuery(async () => (await db.trips.get(payload.trip.id)) ?? null, [payload]);
+  const sa = useSaveAs(payload.trip.id, payload.trip.name);
+  const existing = sa.existing;
   const myName = useLiveQuery(() => lastMyName());
   const [busy, setBusy] = useState(false);
   const trip = { ...payload.trip, budget: 0, createdAt: '' } as Trip;
 
   const save = async () => {
-    if (existing && !confirm(`このスマホには「${existing.name}」がもうあります。共有された旅程で予定を入れ替えますか？\n（自分で変えた予定は消えます）`)) return;
+    if (!sa.name.trim()) return showToast('保存する名前を入れてください');
+    if (existing && !sa.asNew && !confirm(`このスマホにある「${existing.name}」の予定を、共有された旅程に入れ替えますか？\n（自分で変えた予定は消えます）`)) return;
     setBusy(true);
-    const id = await importAsViewer(payload, myName ?? '');
+    const id = await importAsViewer(payload, myName ?? '', { name: sa.name, asNew: sa.asNew });
     showToast('保存しました');
     navigate({ name: 'trip', tripId: id, tab: 'itinerary' }, { replace: true });
   };
@@ -149,14 +152,15 @@ function ViewerShareView({ payload }: { payload: TripPayload }) {
         </section>
         <section className="card import-card">
           <h3 className="card-title">自分のスマホに保存</h3>
+          <SaveAsFields s={sa} sharedName={payload.trip.name} />
           <p className="muted small">
-            {existing
+            {existing && !sa.asNew
               ? `保存してある「${existing.name}」の予定を、この旅程に入れ替えます。`
               : '旅行として保存すると、いつでも見返せます。参考にしたいときは、保存したあと自由に編集できます。'}
-            あとで新しいリンクが届いたら、開いて保存し直すと最新の旅程になります。
+            あとで新しいリンクが届いたら、開いて「上書きする」で保存し直すと最新の旅程になります。
           </p>
           <button type="button" className="btn btn-primary btn-block" onClick={save} disabled={busy}>
-            {existing ? '入れ替えて保存' : '保存する'}
+            {existing && !sa.asNew ? '入れ替えて保存' : '保存する'}
           </button>
         </section>
         <SharedItinerary trip={trip} items={(payload.items ?? []) as ItineraryItem[]} kinds={payload.kinds} />
@@ -166,7 +170,8 @@ function ViewerShareView({ payload }: { payload: TripPayload }) {
 }
 
 function TripShareView({ payload }: { payload: TripPayload }) {
-  const existing = useLiveQuery(async () => (await db.trips.get(payload.trip.id)) ?? null, [payload]);
+  const sa = useSaveAs(payload.trip.id, payload.trip.name);
+  const existing = sa.existing;
   const myName = useLiveQuery(() => lastMyName());
   const [meId, setMeId] = useState<string>('');
   const [busy, setBusy] = useState(false);
@@ -182,9 +187,10 @@ function TripShareView({ payload }: { payload: TripPayload }) {
 
   const doImport = async () => {
     if (!me) return showToast('「あなたは誰？」を選んでください');
-    if (existing && !confirm(`このスマホには「${existing.name}」がもうあります。共有された内容で上書きしますか？\n（予算・手持ち現金・自分の個人の支出・持ち物はそのまま残ります）`)) return;
+    if (!sa.name.trim()) return showToast('保存する名前を入れてください');
+    if (existing && !sa.asNew && !confirm(`このスマホには「${existing.name}」がもうあります。共有された内容で上書きしますか？\n（予算・手持ち現金・自分の個人の支出・持ち物はそのまま残ります）`)) return;
     setBusy(true);
-    const id = await importShared(payload, me);
+    const id = await importShared(payload, me, { name: sa.name, asNew: sa.asNew });
     showToast('取り込みました');
     navigate({ name: 'trip', tripId: id, tab: payload.kind === 'itinerary' ? 'itinerary' : 'settle' }, { replace: true });
   };
@@ -220,14 +226,15 @@ function TripShareView({ payload }: { payload: TripPayload }) {
               ))}
             </div>
           </div>
+          <SaveAsFields s={sa} sharedName={payload.trip.name} />
           <p className="muted small">
-            {existing
+            {existing && !sa.asNew
               ? `このスマホにある「${existing.name}」を上書きします（予算・手持ち現金・自分の個人の支出・持ち物は残ります）。`
               : '新しい旅行として保存します。'}
             {payload.with?.includes('packing') && '持ち物は、このスマホにないものだけ追加します。'}
           </p>
           <button type="button" className="btn btn-primary btn-block" onClick={doImport} disabled={busy || !me}>
-            {existing ? '上書きして取り込む' : '取り込む'}
+            {existing && !sa.asNew ? '上書きして取り込む' : '取り込む'}
           </button>
         </section>
         {payload.kind === 'itinerary' && (

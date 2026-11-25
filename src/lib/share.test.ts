@@ -138,3 +138,42 @@ describe('貼り付けたリンクから開く', () => {
     expect(extractShareData(`${url.slice(0, -10)}`)).toBeUndefined(); // 途中で切れたリンク
   });
 });
+
+describe('名前を変えて保存', () => {
+  beforeEach(async () => {
+    await db.delete();
+    await db.open();
+  });
+  it('名前を変えて取り込む。別の旅行として保存すると元の旅行はそのまま', async () => {
+    const { importShared, asNewTrip } = await import('../db/shareRepo');
+    const withLink = { ...data, expenses: [{ ...expenses[0], itemId: 'i1' }, expenses[1]] };
+    const p = buildPayload('itinerary', trip, withLink, undefined, undefined, { settle: true });
+    await importShared(p, 'sato');
+    // 同じ旅行を「別の旅行として」名前を変えて保存
+    const id2 = await importShared(p, 'sato', { name: '京都（友だちの版）', asNew: true });
+    expect(id2).not.toBe('trip-1');
+    expect((await db.trips.get('trip-1'))!.name).toBe('京都');
+    expect((await db.trips.get(id2))!.name).toBe('京都（友だちの版）');
+    // 予定と支出は両方の旅行にそれぞれある（上書きされていない）
+    expect(await db.itineraryItems.where('tripId').equals('trip-1').count()).toBe(2);
+    expect(await db.itineraryItems.where('tripId').equals(id2).count()).toBe(2);
+    expect(await db.expenses.where('tripId').equals(id2).count()).toBe(2);
+    // ひも付けも新しい予定の ID に付け直されている
+    const newItems = new Set((await db.itineraryItems.where('tripId').equals(id2).toArray()).map((i) => i.id));
+    const linked = (await db.expenses.where('tripId').equals(id2).toArray()).find((e) => e.itemId);
+    expect(newItems.has(linked!.itemId!)).toBe(true);
+    // 名前だけ変えて上書き
+    await importShared(p, 'sato', { name: '京都 2026' });
+    expect((await db.trips.get('trip-1'))!.name).toBe('京都 2026');
+    expect(asNewTrip(p).trip.id).not.toBe(p.trip.id);
+  });
+});
+
+describe('ぶつからない名前', () => {
+  it('同じ名前があれば (2)、(3) …', async () => {
+    const { freeName } = await import('../components/SaveAsFields');
+    expect(freeName('京都', [])).toBe('京都');
+    expect(freeName('京都', ['京都'])).toBe('京都 (2)');
+    expect(freeName('京都', ['京都', '京都 (2)'])).toBe('京都 (3)');
+  });
+});

@@ -2404,3 +2404,14 @@ textarea {
 .open-share-btn {
   margin-top: 8px;
 }
+
+.import-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.import-card .card-title,
+.import-card p {
+  margin: 0;
+}

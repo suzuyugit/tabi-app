@@ -12,7 +12,32 @@ import { isPersonal } from '../lib/share';
  * - 割り勘：割り勘した支出と渡したお金の記録を入れ替える（自分の個人の支出は残す）
  * - 旅程と一緒に割り勘・持ち物が送られてきたら、それも入れる（持ち物は「ないものだけ追加」）
  */
-export async function importShared(p: TripPayload, meId: string): Promise<string> {
+/** 保存のしかた。name = 保存する名前、asNew = 同じ旅行があっても上書きせず別の旅行として保存 */
+export type SaveOptions = { name?: string; asNew?: boolean };
+
+/**
+ * 別の旅行として保存するときは、旅行・予定・支出・渡したお金の ID を付け直す
+ * （同じ ID のまま入れると、元の旅行のデータを上書きしてしまうため）
+ */
+export function asNewTrip(p: TripPayload): TripPayload {
+  const itemIds = new Map((p.items ?? []).map((it) => [it.id, newId()]));
+  return {
+    ...p,
+    trip: { ...p.trip, id: newId() },
+    items: p.items?.map((it) => ({ ...it, id: itemIds.get(it.id)! })),
+    expenses: p.expenses?.map((e) => ({ ...e, id: newId(), itemId: e.itemId ? itemIds.get(e.itemId) : undefined })),
+    repayments: p.repayments?.map((r) => ({ ...r, id: newId() })),
+  };
+}
+
+function applyOptions(p: TripPayload, o: SaveOptions = {}): TripPayload {
+  const q = o.asNew ? asNewTrip(p) : p;
+  const name = o.name?.trim();
+  return name ? { ...q, trip: { ...q.trip, name } } : q;
+}
+
+export async function importShared(src: TripPayload, meId: string, opts?: SaveOptions): Promise<string> {
+  const p = applyOptions(src, opts);
   const tripId = p.trip.id;
   const withSettle = p.kind === 'settle' || !!p.with?.includes('settle');
   await db.transaction('rw', [db.trips, db.itineraryItems, db.itemKinds, db.expenses, db.categories, db.repayments, db.packingItems], async () => {
@@ -57,7 +82,8 @@ function newTripFrom(p: TripPayload, meId: string): Trip {
  * 一緒に行かない人に送られた旅程を保存する（見る用・参考用）。
  * 同じ旅行がなければ「自分」1人の旅行として作り、あれば予定だけ入れ替える（メンバー・予算などはそのまま）
  */
-export async function importAsViewer(p: TripPayload, myName: string): Promise<string> {
+export async function importAsViewer(src: TripPayload, myName: string, opts?: SaveOptions): Promise<string> {
+  const p = applyOptions(src, opts);
   const tripId = p.trip.id;
   await db.transaction('rw', [db.trips, db.itineraryItems, db.itemKinds], async () => {
     const current = await db.trips.get(tripId);

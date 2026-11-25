@@ -119,7 +119,9 @@ export function buildPayload(
     const withParts: ('settle' | 'packing')[] = [];
     if (extras?.settle) {
       const s = buildPayload('settle', trip, data, now);
-      Object.assign(p, { expenses: s.expenses, categories: s.categories, repayments: s.repayments });
+      // 旅程も一緒に送るので、支出と予定のひも付け（itemId）は残す
+      const expenses = data.expenses.filter((e) => !isPersonal(e)).map(strip);
+      Object.assign(p, { expenses, categories: s.categories, repayments: s.repayments });
       withParts.push('settle');
     }
     if (extras?.packing) {
