@@ -2415,3 +2415,88 @@ textarea {
 .import-card p {
   margin: 0;
 }
+
+/* --- 見積もりプラン --- */
+.plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.plan-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.plan-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'name amount' 'formula amount';
+  gap: 0 8px;
+  width: 100%;
+  padding: 8px 2px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-name {
+  grid-area: name;
+  font-weight: 600;
+}
+
+.plan-formula {
+  grid-area: formula;
+}
+
+.plan-amount {
+  grid-area: amount;
+  align-self: center;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 2px;
+  border-top: 2px solid var(--text);
+  font-weight: 700;
+}
+
+.plan-total-num {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-sub {
+  margin: 14px 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.plan-track {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.count-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.count-row input {
+  width: 100px;
+  text-align: right;
+}
+
+.plan-preview {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  text-align: right;
+}

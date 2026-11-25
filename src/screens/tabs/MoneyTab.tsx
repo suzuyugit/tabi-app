@@ -8,6 +8,7 @@ import { isoDate, isoTime } from '../../lib/datetime';
 import { formatMd } from '../../lib/date';
 import { tripDays } from '../../lib/itinerary';
 import { PAYMENT_LABEL } from '../../lib/split';
+import { PlanCard } from '../../components/PlanCard';
 import { deleteExpense } from '../../db/expenseRepo';
 import { SwipeToDelete } from '../../components/SwipeToDelete';
 import { showToast } from '../../components/Toast';
@@ -218,6 +219,8 @@ export function MoneyTab({ trip, onEdit }: Props) {
           <p className="muted small">旅程の予定に「予想費用（1人あたり）」を入れると、これから使う額も見積もりに入ります。</p>
         )}
       </section>
+
+      <PlanCard trip={trip} display={display} spentByCategory={summary.byCategory} categories={data.categories} />
 
       {cash && (
         <section className="card cash-card">
