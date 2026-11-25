@@ -74,14 +74,6 @@ function PackingShareView({ payload }: { payload: ListPayload }) {
         </div>
       </header>
       <main className="content money">
-        <section className="card">
-          <h3 className="card-title">持ち物（{list.items.length}個）</h3>
-          <ul className="shared-packing">
-            {list.items.map((x, i) => (
-              <li key={i}>☐ {x}</li>
-            ))}
-          </ul>
-        </section>
 
         <section className="card import-card">
           <h3 className="card-title">旅行の持ち物に入れる</h3>
@@ -113,6 +105,14 @@ function PackingShareView({ payload }: { payload: ListPayload }) {
               💾 保存
             </button>
           </div>
+        </section>
+        <section className="card">
+          <h3 className="card-title">持ち物（{list.items.length}個）</h3>
+          <ul className="shared-packing">
+            {list.items.map((x, i) => (
+              <li key={i}>☐ {x}</li>
+            ))}
+          </ul>
         </section>
       </main>
     </div>
@@ -147,7 +147,6 @@ function ViewerShareView({ payload }: { payload: TripPayload }) {
         <section className="card">
           <div className="muted small">{formatRange(trip.startDate, trip.endDate)}</div>
         </section>
-        <SharedItinerary trip={trip} items={(payload.items ?? []) as ItineraryItem[]} kinds={payload.kinds} />
         <section className="card import-card">
           <h3 className="card-title">自分のスマホに保存</h3>
           <p className="muted small">
@@ -160,6 +159,7 @@ function ViewerShareView({ payload }: { payload: TripPayload }) {
             {existing ? '入れ替えて保存' : '保存する'}
           </button>
         </section>
+        <SharedItinerary trip={trip} items={(payload.items ?? []) as ItineraryItem[]} kinds={payload.kinds} />
       </main>
     </div>
   );
@@ -208,6 +208,28 @@ function TripShareView({ payload }: { payload: TripPayload }) {
           <div className="muted small">メンバー：{trip.members.map((m) => m.name).join('・')}</div>
         </section>
 
+        <section className="card import-card">
+          <h3 className="card-title">自分のスマホに取り込む</h3>
+          <div className="field">
+            <span className="label">あなたは誰？</span>
+            <div className="chips" role="radiogroup" aria-label="あなたは誰？">
+              {trip.members.map((m) => (
+                <button key={m.id} type="button" role="radio" aria-checked={me === m.id} className={`pick ${me === m.id ? 'active' : ''}`} onClick={() => setMeId(m.id)}>
+                  {m.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="muted small">
+            {existing
+              ? `このスマホにある「${existing.name}」を上書きします（予算・手持ち現金・自分の個人の支出・持ち物は残ります）。`
+              : '新しい旅行として保存します。'}
+            {payload.with?.includes('packing') && '持ち物は、このスマホにないものだけ追加します。'}
+          </p>
+          <button type="button" className="btn btn-primary btn-block" onClick={doImport} disabled={busy || !me}>
+            {existing ? '上書きして取り込む' : '取り込む'}
+          </button>
+        </section>
         {payload.kind === 'itinerary' && (
           <>
             {(payload.with?.length ?? 0) > 0 && <h3 className="section-title">🗓️ 旅程</h3>}
@@ -231,28 +253,6 @@ function TripShareView({ payload }: { payload: TripPayload }) {
           </section>
         )}
 
-        <section className="card import-card">
-          <h3 className="card-title">自分のスマホに取り込む</h3>
-          <div className="field">
-            <span className="label">あなたは誰？</span>
-            <div className="chips" role="radiogroup" aria-label="あなたは誰？">
-              {trip.members.map((m) => (
-                <button key={m.id} type="button" role="radio" aria-checked={me === m.id} className={`pick ${me === m.id ? 'active' : ''}`} onClick={() => setMeId(m.id)}>
-                  {m.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="muted small">
-            {existing
-              ? `このスマホにある「${existing.name}」を上書きします（予算・手持ち現金・自分の個人の支出・持ち物は残ります）。`
-              : '新しい旅行として保存します。'}
-            {payload.with?.includes('packing') && '持ち物は、このスマホにないものだけ追加します。'}
-          </p>
-          <button type="button" className="btn btn-primary btn-block" onClick={doImport} disabled={busy || !me}>
-            {existing ? '上書きして取り込む' : '取り込む'}
-          </button>
-        </section>
       </main>
     </div>
   );
