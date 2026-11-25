@@ -135,6 +135,12 @@ function PlanLineSheet({ trip, line, onClose }: { trip: Trip; line?: PlanLine; o
   // 1泊あたりは泊まる夜（最終日を除く）、それ以外は旅行の全部の日
   const allDays = tripDays(trip);
   const dayChoices = unit === 'night' && allDays.length > 1 ? allDays.slice(0, -1) : allDays;
+  // 同じ場所の日をまとめて選べるように（例：📍札幌 → 札幌にいる日すべて）
+  const placeGroups = [...dayChoices.reduce((m, d) => {
+    const p = places.get(d.date);
+    if (p) m.set(p, [...(m.get(p) ?? []), d.date]);
+    return m;
+  }, new Map<string, string[]>())];
   const byDates = (unit === 'day' || unit === 'night') && dates.length > 0; // 選んだ日数を回数にする
   const toggleDate = (d: string) => setDates((ds) => (ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d].sort()));
   const [error, setError] = useState('');
@@ -244,7 +250,35 @@ function PlanLineSheet({ trip, line, onClose }: { trip: Trip; line?: PlanLine; o
         <div className="field">
           <div className="label-row">
             <span className="label">何月何日の費用か（任意・複数選べます）</span>
-            {dates.length > 0 && (
+          </div>
+          <div className="date-quick" role="group" aria-label="まとめて選ぶ">
+            <button
+              type="button"
+              className="chip"
+              onClick={() => setDates(dates.length === dayChoices.length ? [] : dayChoices.map((d) => d.date))}
+            >
+              {dates.length === dayChoices.length ? '選択を外す' : 'すべて選ぶ'}
+            </button>
+            {placeGroups.length > 1 &&
+              placeGroups.map(([place, ds]) => {
+                const on = ds.every((d) => dates.includes(d));
+                return (
+                  <button
+                    key={place}
+                    type="button"
+                    aria-pressed={on}
+                    className={`chip ${on ? 'active' : ''}`}
+                    onClick={() =>
+                      setDates((cur) =>
+                        on ? cur.filter((d) => !ds.includes(d)) : [...new Set([...cur, ...ds])].sort(),
+                      )
+                    }
+                  >
+                    📍{place}
+                  </button>
+                );
+              })}
+            {dates.length > 0 && dates.length < dayChoices.length && (
               <button type="button" className="btn-text" onClick={() => setDates([])}>
                 選択を外す
               </button>

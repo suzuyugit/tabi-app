@@ -2574,3 +2574,24 @@ textarea {
   font-size: 11px;
   color: var(--muted);
 }
+
+.date-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.date-quick .chip {
+  min-height: 34px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.date-quick .chip.active {
+  border-color: var(--primary);
+  background: var(--primary-weak);
+  color: var(--primary);
+}
