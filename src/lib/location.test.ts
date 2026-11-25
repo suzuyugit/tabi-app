@@ -23,12 +23,18 @@ describe('その日どこにいるか', () => {
     expect(m2.get('2026-01-04')).toBe('小樽');
   });
 
-  it('連泊の宿は名前でもよい。情報がない日は出さない', () => {
+  it('宿の名前は場所にしない。場所のない宿は前の日の場所を引き継ぐ', () => {
+    const items = [
+      { ...base, kind: 'move', date: '2026-01-01', time: '10:00', title: '飛行機', to: '札幌' },
+      { ...base, kind: 'stay', date: '2026-01-02', title: 'ホテル', checkOutDate: '2026-01-04' },
+    ];
+    const m = dayLocations(trip, items);
+    expect([...m.values()]).toEqual(['札幌', '札幌', '札幌', '札幌']);
+  });
+
+  it('情報がない日は出さない', () => {
     const items = [{ ...base, kind: 'stay', date: '2026-01-02', title: '旅館 京の宿', checkOutDate: '2026-01-04' }];
     const m = dayLocations(trip, items);
-    expect(m.has('2026-01-01')).toBe(false);
-    expect(m.get('2026-01-02')).toBe('旅館 京の宿');
-    expect(m.get('2026-01-03')).toBe('旅館 京の宿');
-    expect(m.get('2026-01-04')).toBe('旅館 京の宿'); // チェックアウトの日は前の日を引き継ぐ
+    expect(m.size).toBe(0);
   });
 });

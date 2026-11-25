@@ -7,7 +7,7 @@ type Item = Pick<ItineraryItem, 'kind' | 'date' | 'time' | 'title' | 'places' | 
 /**
  * 日付 → 場所。決め方（上ほど優先）：
  * 1. 自分で決めた場所（trip.dayPlaces）
- * 2. その日の夜に泊まる宿（宿泊の予定の場所、なければ名前）
+ * 2. その日の夜に泊まる宿の「場所」（宿の名前は場所にしない）
  * 3. その日に移動で着いた場所（いちばん最後に着いたもの）
  * 4. 前の日の場所を引き継ぐ
  */
@@ -18,13 +18,13 @@ export function dayLocations(trip: Pick<Trip, 'startDate' | 'endDate' | 'dayPlac
     const day = d.date;
     const manual = trip.dayPlaces?.[day]?.trim();
     const stay = items
-      .filter((it) => it.kind === 'stay' && it.date <= day && day < (it.checkOutDate ?? addDays(it.date, 1)))
+      .filter((it) => it.kind === 'stay' && it.places?.[0]?.trim() && it.date <= day && day < (it.checkOutDate ?? addDays(it.date, 1)))
       .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
     const arrivals = items
       .filter((it) => it.kind === 'move' && it.to?.trim() && (it.arrivalDate ?? it.date) === day)
       .sort((a, b) => (a.arrivalTime ?? a.time ?? '').localeCompare(b.arrivalTime ?? b.time ?? '') || byOrder(a as ItineraryItem, b as ItineraryItem));
     const arrived = arrivals[arrivals.length - 1]?.to?.trim();
-    const loc = manual || (stay && (stay.places?.[0]?.trim() || stay.title.trim())) || arrived || carry;
+    const loc = manual || stay?.places?.[0]?.trim() || arrived || carry;
     if (loc) out.set(day, loc);
     carry = loc;
   }
