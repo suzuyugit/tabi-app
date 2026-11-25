@@ -2595,3 +2595,42 @@ textarea {
   background: var(--primary-weak);
   color: var(--primary);
 }
+
+.plan-head-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.plan-head-actions .btn {
+  white-space: nowrap;
+}
+
+.plan-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plan-item-row {
+  padding: 8px 14px;
+}
+
+.plan-item-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.plan-item-title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-item-cost {
+  font-weight: 600;
+  white-space: nowrap;
+}

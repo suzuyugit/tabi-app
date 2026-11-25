@@ -1,8 +1,8 @@
 // 見積もりプラン（「食費 1日5,000円 × 5日」のような予算の内訳）
-import type { PlanLine, Trip } from '../db/types';
-import { convert, JPY } from './currency';
+import type { ItemKindDef, ItineraryItem, PlanLine, Trip } from '../db/types';
+import { convert, JPY, tripCurrency } from './currency';
 import { dayCount } from './date';
-import { addDays } from './itinerary';
+import { addDays, kindMeta } from './itinerary';
 
 export const PLAN_UNITS: { key: PlanLine['unit']; label: string; per: string; count: string }[] = [
   { key: 'day', label: '1日あたり', per: '1日', count: '日' },
@@ -56,4 +56,28 @@ export function datesLabel(dates: string[]): string {
     i = j + 1;
   }
   return parts.join('・');
+}
+
+type CostItem = Pick<ItineraryItem, 'id' | 'kind' | 'title' | 'date' | 'estimatedCost' | 'estimatedCurrency'>;
+
+/** 見積もりプランに入れた旅程の予定を、一括の行に直す（カテゴリは予定の種類から） */
+export function itemPlanLines(
+  items: CostItem[],
+  ids: string[] | undefined,
+  trip: Pick<Trip, 'currency'>,
+  kinds?: ItemKindDef[],
+): PlanLine[] {
+  const pick = new Set(ids ?? []);
+  return items
+    .filter((it) => pick.has(it.id) && (it.estimatedCost ?? 0) > 0)
+    .map((it) => ({
+      id: `item:${it.id}`,
+      categoryId: kindMeta(it.kind, kinds).categoryId,
+      amount: it.estimatedCost ?? 0,
+      currency: it.estimatedCurrency ?? tripCurrency(trip),
+      unit: 'once' as const,
+      count: 1,
+      dates: [it.date],
+      memo: it.title,
+    }));
 }

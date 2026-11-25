@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { datesLabel, defaultCount, lineAmount, planByCategory, planTotal } from './plan';
+import { datesLabel, defaultCount, itemPlanLines, lineAmount, planByCategory, planTotal } from './plan';
+import { kindMeta } from './itinerary';
 import type { PlanLine } from '../db/types';
 
 const trip = { startDate: '2026-12-01', endDate: '2026-12-05', currency: 'USD', rate: 150 };
@@ -28,5 +29,22 @@ describe('見積もりプラン', () => {
     expect(datesLabel(['2026-11-27', '2026-11-25', '2026-11-26', '2026-11-29'])).toBe('11/25〜11/27・11/29');
     expect(datesLabel(['2026-12-31', '2027-01-01'])).toBe('12/31〜1/1');
     expect(datesLabel([])).toBe('');
+  });
+});
+
+describe('旅程の予想金額を見積もりに入れる', () => {
+  it('選んだ予定だけを一括の行にする（カテゴリは種類から・通貨は未設定なら現地通貨）', () => {
+    const items = [
+      { id: 'a', kind: 'food', title: '寿司', date: '2026-01-02', estimatedCost: 5000, estimatedCurrency: 'JPY' },
+      { id: 'b', kind: 'stay', title: 'ホテル', date: '2026-01-02', estimatedCost: 12000 },
+      { id: 'c', kind: 'food', title: 'ラーメン', date: '2026-01-03', estimatedCost: 1000 },
+    ];
+    const lines = itemPlanLines(items, ['a', 'b', 'zzz'], { currency: 'KRW' });
+    expect(lines.map((l) => [l.memo, l.unit, l.amount, l.currency, l.dates])).toEqual([
+      ['寿司', 'once', 5000, 'JPY', ['2026-01-02']],
+      ['ホテル', 'once', 12000, 'KRW', ['2026-01-02']],
+    ]);
+    expect(lines[0].categoryId).toBe(kindMeta('food').categoryId);
+    expect(itemPlanLines(items, undefined, {})).toEqual([]);
   });
 });

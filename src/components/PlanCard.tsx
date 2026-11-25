@@ -1,12 +1,14 @@
 import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import type { Category, PlanLine, Trip } from '../db/types';
+import type { Category, ItineraryItem, PlanLine, Trip } from '../db/types';
 import { convert, formatMoney, JPY, parseMoneyInput, toInputValue, tripCurrency } from '../lib/currency';
-import { datesLabel, defaultCount, lineAmount, lineIn, PLAN_UNITS, planByCategory, planTotal, unitMeta } from '../lib/plan';
-import { tripDays } from '../lib/itinerary';
+import { datesLabel, defaultCount, itemPlanLines, lineAmount, lineIn, PLAN_UNITS, planByCategory, planTotal, unitMeta } from '../lib/plan';
+import { byOrder, itemIcon, tripDays } from '../lib/itinerary';
+import { withPlace } from '../lib/location';
 import { useDayPlaces } from '../hooks/useDayPlaces';
 import { newId } from '../lib/id';
-import { useCategories } from '../hooks/useKinds';
+import { useCategories, useItemKinds } from '../hooks/useKinds';
 import { MoneyField } from './MoneyField';
 import { Sheet } from './Sheet';
 import { showToast } from './Toast';
@@ -23,7 +25,20 @@ const savePlan = (trip: Trip, plan: PlanLine[]) => db.trips.update(trip.id, { pl
 /** お金タブの「見積もりプラン」：食費 1日5,000円 × 5日 のような予算の内訳と、使った額との比べ */
 export function PlanCard({ trip, display, spentByCategory, categories }: Props) {
   const [editing, setEditing] = useState<{ line?: PlanLine } | null>(null);
-  const lines = trip.plan ?? [];
+  const [pickingItems, setPickingItems] = useState(false);
+  const kinds = useItemKinds();
+  // 予想金額を入れた旅程の予定（見積もりに入れるかを選べる）
+  const costItems =
+    useLiveQuery(
+      async () =>
+        (await db.itineraryItems.where('tripId').equals(trip.id).toArray())
+          .filter((it) => (it.estimatedCost ?? 0) > 0)
+          .sort((a, b) => a.date.localeCompare(b.date) || byOrder(a, b)),
+      [trip.id],
+    ) ?? [];
+  const own = trip.plan ?? [];
+  const fromItems = itemPlanLines(costItems, trip.planItemIds, trip, kinds);
+  const lines = [...own, ...fromItems];
   const fmt = (n: number) => formatMoney(n, display);
   const total = planTotal(lines, display, trip);
   const totalYen = planTotal(lines, JPY, trip);
@@ -39,16 +54,26 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
     <section className="card">
       <div className="settle-head">
         <h3 className="card-title">見積もりプラン（自分の分）</h3>
-        <button type="button" className="btn btn-ghost btn-small" onClick={() => setEditing({})}>
-          ＋ 項目
-        </button>
+        <div className="plan-head-actions">
+          {costItems.length > 0 && (
+            <button type="button" className="btn btn-ghost btn-small" onClick={() => setPickingItems(true)}>
+              🗓 旅程から
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setEditing({})}>
+            ＋ 項目
+          </button>
+        </div>
       </div>
       {lines.length === 0 ? (
-        <p className="muted small">「食費 1日5,000円 × 5日」のように、何にいくら使うかの見積もりを立てられます。合計はそのまま予算にもできます。</p>
+        <p className="muted small">
+          「食費 1日5,000円 × 5日」のように、何にいくら使うかの見積もりを立てられます。合計はそのまま予算にもできます。
+          {costItems.length > 0 && '「🗓 旅程から」で、予定に入れた予想金額も足せます。'}
+        </p>
       ) : (
         <>
           <ul className="plan-list">
-            {lines.map((l) => {
+            {own.map((l) => {
               const cat = categories.get(l.categoryId);
               const u = unitMeta(l.unit);
               const cur = l.currency ?? JPY;
@@ -61,6 +86,27 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
                     <span className="plan-formula muted small">
                       {l.unit === 'once' ? '一括' : `${u.per} ${formatMoney(l.amount, cur)} × ${l.count}${u.count}`}
                       {l.dates && l.dates.length > 0 && <span className="plan-dates">📅 {datesLabel(l.dates)}</span>}
+                    </span>
+                    <span className="plan-amount">
+                      {fmt(lineIn(l, display, trip))}
+                      {cur !== display && <span className="bd-sub">{formatMoney(lineAmount(l), cur)}</span>}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            {fromItems.map((l) => {
+              const it = costItems.find((x) => `item:${x.id}` === l.id)!;
+              const cur = l.currency ?? JPY;
+              return (
+                <li key={l.id}>
+                  <button type="button" className="plan-row" onClick={() => setPickingItems(true)}>
+                    <span className="plan-name">
+                      {itemIcon(it, kinds)} {l.memo}
+                    </span>
+                    <span className="plan-formula muted small">
+                      🗓 旅程の予想金額
+                      <span className="plan-dates">📅 {datesLabel(l.dates ?? [])}</span>
                     </span>
                     <span className="plan-amount">
                       {fmt(lineIn(l, display, trip))}
@@ -117,6 +163,7 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
         </>
       )}
       {editing && <PlanLineSheet trip={trip} line={editing.line} onClose={() => setEditing(null)} />}
+      {pickingItems && <PlanItemsSheet trip={trip} items={costItems} onClose={() => setPickingItems(false)} />}
     </section>
   );
 }
@@ -327,6 +374,65 @@ function PlanLineSheet({ trip, line, onClose }: { trip: Trip; line?: PlanLine; o
             この項目を消す
           </button>
         )}
+      </div>
+    </Sheet>
+  );
+}
+
+/** 旅程に入れた予想金額のうち、どれを見積もりプランに入れるかを選ぶ */
+function PlanItemsSheet({ trip, items, onClose }: { trip: Trip; items: ItineraryItem[]; onClose: () => void }) {
+  const kinds = useItemKinds();
+  const places = useDayPlaces(trip);
+  const [picked, setPicked] = useState<string[]>(() => (trip.planItemIds ?? []).filter((id) => items.some((it) => it.id === id)));
+  const days = new Map(tripDays(trip).map((d) => [d.date, d]));
+  const all = picked.length === items.length;
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const sum = items.filter((it) => picked.includes(it.id)).reduce((a, it) => a + convert(it.estimatedCost ?? 0, it.estimatedCurrency ?? tripCurrency(trip), JPY, trip), 0);
+
+  const save = async () => {
+    await db.trips.update(trip.id, { planItemIds: picked.length > 0 ? picked : undefined });
+    showToast(picked.length > 0 ? `旅程の予定 ${picked.length}件を見積もりに入れました` : '旅程の予定を見積もりから外しました');
+    onClose();
+  };
+
+  return (
+    <Sheet
+      title="旅程から入れる"
+      onClose={onClose}
+      action={
+        <button type="button" className="btn btn-primary btn-small" onClick={save}>
+          保存
+        </button>
+      }
+    >
+      <div className="form">
+        <p className="muted small">予定に入れた予想金額を、見積もりプランに足します。入れたいものを選んでください（カテゴリは予定の種類から決まります）。</p>
+        <div className="date-quick">
+          <button type="button" className="chip" onClick={() => setPicked(all ? [] : items.map((it) => it.id))}>
+            {all ? '選択を外す' : 'すべて選ぶ'}
+          </button>
+        </div>
+        <div className="plan-item-list">
+          {items.map((it) => {
+            const d = days.get(it.date);
+            const cur = it.estimatedCurrency ?? tripCurrency(trip);
+            return (
+              <label key={it.id} className="check-row plan-item-row">
+                <input type="checkbox" checked={picked.includes(it.id)} onChange={() => toggle(it.id)} />
+                <span className="plan-item-main">
+                  <span className="plan-item-title">
+                    {itemIcon(it, kinds)} {it.title || '（名前なし）'}
+                  </span>
+                  <span className="muted small">{d ? withPlace(`${d.label} ${d.sub}`, places.get(it.date)) : it.date}</span>
+                </span>
+                <span className="plan-item-cost">{formatMoney(it.estimatedCost ?? 0, cur)}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="plan-preview">
+          選んだ {picked.length}件 = {formatMoney(sum)}
+        </p>
       </div>
     </Sheet>
   );
