@@ -11,6 +11,7 @@ import { newId } from '../lib/id';
 import { useCategories, useItemKinds } from '../hooks/useKinds';
 import { MoneyField } from './MoneyField';
 import { Sheet } from './Sheet';
+import { SwipeToDelete } from './SwipeToDelete';
 import { showToast } from './Toast';
 
 type Props = {
@@ -43,6 +44,23 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
   const total = planTotal(lines, display, trip);
   const totalYen = planTotal(lines, JPY, trip);
   const byCat = planByCategory(lines, display, trip);
+
+  // 横にスライドして消す（確認つき）。旅程から入れた行は見積もりから外すだけで、予定は消さない
+  const removeOwn = async (l: PlanLine, label: string) => {
+    if (!confirm(`見積もり「${label}」を本当に削除しますか？`)) return false;
+    const cur = await db.trips.get(trip.id);
+    await savePlan(trip, (cur?.plan ?? []).filter((x) => x.id !== l.id));
+    showToast('見積もりを削除しました');
+    return true;
+  };
+  const removeItem = async (itemId: string, label: string) => {
+    if (!confirm(`「${label}」を見積もりから外しますか？（旅程の予定はそのままです）`)) return false;
+    const cur = await db.trips.get(trip.id);
+    const ids = (cur?.planItemIds ?? []).filter((x) => x !== itemId);
+    await db.trips.update(trip.id, { planItemIds: ids.length > 0 ? ids : undefined });
+    showToast('見積もりから外しました');
+    return true;
+  };
 
   const toBudget = async () => {
     if (trip.budget > 0 && !confirm(`予算（自分の分）を ${formatMoney(trip.budget)} から ${formatMoney(totalYen)} に変えますか？`)) return;
@@ -79,6 +97,7 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
               const cur = l.currency ?? JPY;
               return (
                 <li key={l.id}>
+                  <SwipeToDelete onDelete={() => removeOwn(l, `${l.memo || cat?.name || 'その他'} ${formatMoney(lineAmount(l), cur)}`)}>
                   <button type="button" className="plan-row" onClick={() => setEditing({ line: l })}>
                     <span className="plan-name">
                       {cat?.icon ?? '📦'} {l.memo || cat?.name || 'その他'}
@@ -92,6 +111,7 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
                       {cur !== display && <span className="bd-sub">{formatMoney(lineAmount(l), cur)}</span>}
                     </span>
                   </button>
+                  </SwipeToDelete>
                 </li>
               );
             })}
@@ -100,6 +120,7 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
               const cur = l.currency ?? JPY;
               return (
                 <li key={l.id}>
+                  <SwipeToDelete onDelete={() => removeItem(it.id, l.memo || '予定')}>
                   <button type="button" className="plan-row" onClick={() => setPickingItems(true)}>
                     <span className="plan-name">
                       {itemIcon(it, kinds)} {l.memo}
@@ -113,6 +134,7 @@ export function PlanCard({ trip, display, spentByCategory, categories }: Props) 
                       {cur !== display && <span className="bd-sub">{formatMoney(lineAmount(l), cur)}</span>}
                     </span>
                   </button>
+                  </SwipeToDelete>
                 </li>
               );
             })}
